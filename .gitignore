@@ -17,3 +17,8 @@ terraform.rc
 *.auto.tfvars
 !terraform.tfvars
 .env
+
+# TLS material — never commit
+*.key
+*.crt
+*.pem

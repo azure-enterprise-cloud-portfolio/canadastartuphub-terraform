@@ -1,0 +1,71 @@
+# =============================================================================
+# Pre-commit Hook Configuration
+#
+# Install:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually:
+#   pre-commit run --all-files
+#
+# Update hook versions:
+#   pre-commit autoupdate
+# =============================================================================
+
+repos:
+
+  # ---------------------------------------------------------------------------
+  # General file hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: detect-private-key
+
+  # ---------------------------------------------------------------------------
+  # Terraform — fmt + validate as local hooks.
+  # antonbabenko/pre-commit-terraform is bash-based and breaks on native
+  # Windows, so we call terraform directly instead. trivy/checkov: install
+  # separately if needed.
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: Terraform fmt
+        entry: terraform fmt -check -diff -recursive .
+        language: system
+        files: \.tf$
+        pass_filenames: false
+
+      - id: terraform-validate
+        name: Terraform validate
+        entry: python infra/scripts/tf_validate.py
+        language: system
+        files: \.tf$
+        pass_filenames: false
+
+      # Requires tflint on PATH: https://github.com/terraform-linters/tflint
+      # Uncomment once installed.
+      # - id: tflint
+      #   name: TFLint
+      #   entry: tflint --config=infra/.tflint.hcl --recursive
+      #   language: system
+      #   files: \.tf$
+      #   pass_filenames: false
+
+  # ---------------------------------------------------------------------------
+  # Secrets detection
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        # gitleaks only auto-discovers .gitleaks.toml at the repo root
+        args: [--config=infra/.gitleaks.toml]
