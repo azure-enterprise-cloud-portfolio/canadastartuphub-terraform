@@ -47,6 +47,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Debug identity
+        run: |
+          echo "Role ARN: ${{ secrets.AWS_ROLE_ARN }}"
+          aws sts get-caller-identity
+
       - name: Terraform fmt
         run: terraform fmt -check -recursive
         working-directory: infra
