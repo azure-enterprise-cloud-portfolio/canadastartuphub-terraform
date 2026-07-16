@@ -2,7 +2,7 @@ provider "aws" {
   region = var.aws_region
   default_tags {
     tags = {
-      Project     = "canadastartuphub"
+      Project     = "canadastartupdirectory"
       Environment = "prod"
       ManagedBy   = "terraform"
     }

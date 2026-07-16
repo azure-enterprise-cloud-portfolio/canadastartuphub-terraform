@@ -23,7 +23,6 @@ concurrency:
 
 env:
   AWS_REGION: ca-central-1
-  STATE_BUCKET: canadastartupdirectory-tfstate
   TF_VAR_github_token: ${{ secrets.AMPLIFY_GITHUB_TOKEN }}
   TF_IN_AUTOMATION: "true"
 
@@ -37,23 +36,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Ensure state bucket exists
-        run: |
-          if ! aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
-            aws s3api create-bucket --bucket "$STATE_BUCKET" \
-              --region "$AWS_REGION" \
-              --create-bucket-configuration LocationConstraint="$AWS_REGION"
-            aws s3api put-bucket-versioning --bucket "$STATE_BUCKET" \
-              --versioning-configuration Status=Enabled
-            aws s3api put-public-access-block --bucket "$STATE_BUCKET" \
-              --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-          fi
 
       - name: Terraform fmt
         run: terraform fmt -check -recursive
