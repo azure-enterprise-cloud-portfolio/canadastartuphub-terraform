@@ -1,6 +1,6 @@
 # Infrastructure — Canada Startup Hub
 
-Terraform for **canadastartuphub.ca**: the AWS Amplify app that hosts the
+Terraform for **canadastartupdirectory.ca**: the AWS Amplify app that hosts the
 Next.js site (SSR), the Route 53 hosted zone, the TLS certificate, and the
 Amplify domain association.
 
@@ -26,7 +26,7 @@ infra/
 │   ├── amplify-app/             # Amplify app + service role + production branch
 │   └── amplify-domain/          # Route 53 zone + ACM + Amplify domain association
 └── envs/
-    └── prod/                    # canadastartuphub.ca (apex + www) on branch main
+    └── prod/                    # canadastartupdirectory.ca (apex + www) on branch main
         ├── versions.tf
         ├── backend.tf
         ├── providers.tf
@@ -64,7 +64,7 @@ Actions):
 
 ## Steps to follow (fresh setup, end to end)
 
-Goal: `canadastartuphub.ca` and `www.canadastartuphub.ca` served by Amplify
+Goal: `canadastartupdirectory.ca` and `www.canadastartupdirectory.ca` served by Amplify
 over HTTPS, deployed entirely through the pipeline.
 
 ### Step 1 — Bootstrap the CI role (once, locally)
@@ -122,7 +122,7 @@ Repeat until this returns the **AWS** nameservers, not GoDaddy's — minutes to
 a few hours for a `.ca` domain:
 
 ```powershell
-nslookup -type=NS canadastartuphub.ca
+nslookup -type=NS canadastartupdirectory.ca
 ```
 
 Once delegation is live, Amplify validates the certificate and the domain
@@ -132,9 +132,9 @@ association moves `PENDING_VERIFICATION → PENDING_DEPLOYMENT → AVAILABLE`
 ### Step 6 — Verify the site
 
 ```powershell
-nslookup canadastartuphub.ca
-curl.exe -I https://canadastartuphub.ca
-curl.exe -I https://www.canadastartuphub.ca
+nslookup canadastartupdirectory.ca
+curl.exe -I https://canadastartupdirectory.ca
+curl.exe -I https://www.canadastartupdirectory.ca
 ```
 
 Expect `200`/`301` with a valid TLS handshake, and the domain showing
@@ -190,7 +190,7 @@ certificate, and the Amplify domain association mapping branches to subdomains.
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
-| `domain_name` | string | — | Root domain, e.g. `canadastartuphub.ca` |
+| `domain_name` | string | — | Root domain, e.g. `canadastartupdirectory.ca` |
 | `amplify_app_id` | string | — | Amplify app ID |
 | `amplify_branch` | string | — | Amplify branch to map the domain to |
 | `subdomains` | list(string) | `["", "www"]` | Prefixes to map; `""` is the apex |
@@ -231,7 +231,7 @@ module "amplify_domain" {
   create_hosted_zone = false
   hosted_zone_id     = "<zone id from prod output>"
   amplify_branch     = "<branch>"
-  subdomains         = ["<name>"] # e.g. dev.canadastartuphub.ca
+  subdomains         = ["<name>"] # e.g. dev.canadastartupdirectory.ca
 }
 ```
 
@@ -250,7 +250,7 @@ Give it its own state key in `backend.tf`
   missing/wrong, or the bootstrap stack hasn't been applied. Fork PRs also
   fail here by design: GitHub withholds OIDC tokens from forks.
 - **Domain association stuck in `PENDING_VERIFICATION`** — delegation isn't
-  live yet. Re-run `nslookup -type=NS canadastartuphub.ca`; it must return AWS
+  live yet. Re-run `nslookup -type=NS canadastartupdirectory.ca`; it must return AWS
   nameservers.
 - **`certificate_settings` drift on every plan** — AWS provider older than
   5.82.0. Upgrade.

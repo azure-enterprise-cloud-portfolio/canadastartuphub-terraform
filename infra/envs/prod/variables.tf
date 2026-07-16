@@ -5,7 +5,7 @@ variable "aws_region" {
 
 variable "domain_name" {
   type    = string
-  default = "canadastartuphub.ca"
+  default = "canadastartupdirectory.ca"
 }
 
 variable "repository_url" {

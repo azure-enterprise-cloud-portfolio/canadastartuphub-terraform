@@ -1,7 +1,7 @@
 module "amplify_app" {
   source = "../../modules/amplify-app"
 
-  app_name       = "canadastartuphub"
+  app_name       = "canadastartupdirectory"
   repository_url = var.repository_url
   github_token   = var.github_token
   branch_name    = var.amplify_branch
@@ -21,6 +21,6 @@ module "amplify_domain" {
   create_hosted_zone = true
   certificate_type   = "AMPLIFY_MANAGED"
 
-  # "" maps the apex (canadastartuphub.ca), "www" serves www.
+  # "" maps the apex (canadastartupdirectory.ca), "www" serves www.
   subdomains = ["", "www"]
 }

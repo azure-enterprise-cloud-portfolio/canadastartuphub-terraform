@@ -1,6 +1,6 @@
 variable "domain_name" {
   type        = string
-  description = "Root domain, e.g. canadastartuphub.ca"
+  description = "Root domain, e.g. canadastartupdirectory.ca"
 }
 
 variable "amplify_app_id" {
