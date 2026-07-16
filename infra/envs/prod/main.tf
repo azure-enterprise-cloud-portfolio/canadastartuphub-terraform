@@ -1,26 +1,11 @@
-module "amplify_app" {
-  source = "../../modules/amplify-app"
-
-  app_name       = "canadastartupdirectory"
-  repository_url = var.repository_url
-  github_token   = var.github_token
-  branch_name    = var.amplify_branch
+resource "aws_route53_zone" "this" {
+  name = var.domain_name
 }
 
-module "amplify_domain" {
-  source = "../../modules/amplify-domain"
-
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  domain_name        = var.domain_name
-  amplify_app_id     = module.amplify_app.app_id
-  amplify_branch     = module.amplify_app.branch_name
-  create_hosted_zone = true
-  certificate_type   = "AMPLIFY_MANAGED"
-
-  # "" maps the apex (canadastartupdirectory.ca), "www" serves www.
-  subdomains = ["", "www"]
+# The zone originally lived inside the removed amplify-domain module. Re-home
+# it in state instead of destroy-and-recreate so the zone (and the nameservers
+# delegated at the registrar) survives the module's removal.
+moved {
+  from = module.amplify_domain.aws_route53_zone.this[0]
+  to   = aws_route53_zone.this
 }
