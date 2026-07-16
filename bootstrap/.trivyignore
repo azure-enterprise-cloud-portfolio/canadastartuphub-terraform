@@ -1,0 +1,7 @@
+# =============================================================================
+# Trivy Ignore — suppress known false positives
+# Format: AVD-ID or CVE-ID, one per line
+# Docs: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+# =============================================================================
+
+# No suppressions yet. Add AVD/CVE IDs here as trivy findings are triaged.
