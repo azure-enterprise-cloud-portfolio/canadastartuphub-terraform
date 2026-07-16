@@ -92,7 +92,7 @@ secret.
 ### Step 3 — Push to `main`
 
 Commit and push (or merge a PR). The workflow assumes the OIDC role, creates
-the `canadastartuphub-tfstate` bucket if it's missing, and applies. This
+the `canadastartupdirectory-tfstate` bucket if it's missing, and applies. This
 creates the Amplify app, the production branch, the Route 53 hosted zone, and
 the domain association. The apply does **not** wait for certificate
 verification (`wait_for_verification = false`) — that completes on its own
@@ -262,7 +262,7 @@ Give it its own state key in `backend.tf`
 
 ## State & locking
 
-Remote state lives in S3 (`canadastartuphub-tfstate`, key
+Remote state lives in S3 (`canadastartupdirectory-tfstate`, key
 `envs/prod/terraform.tfstate`) with Terraform's native S3 lockfile
 (`use_lockfile = true`) — no DynamoDB table needed. The bootstrap stack keeps
 its own key (`bootstrap/prod/terraform.tfstate`) in the same bucket. The

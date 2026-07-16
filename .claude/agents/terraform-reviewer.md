@@ -13,7 +13,7 @@ Context you must respect:
 - `bootstrap/` (GitHub OIDC provider + CI role) is applied manually and
   controls CI's AWS access. IAM/trust-policy changes here are the highest
   risk in the repo.
-- State: S3 bucket `canadastartuphub-tfstate`.
+- State: S3 bucket `canadastartupdirectory-tfstate`.
 
 Review checklist:
 1. Destructive changes: renamed resources or changed identifiers that force

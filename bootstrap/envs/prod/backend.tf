@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    bucket       = "canadastartuphub-tfstate"
+    bucket       = "canadastartupdirectory-tfstate"
     key          = "bootstrap/prod/terraform.tfstate"
     region       = "ca-central-1"
     encrypt      = true

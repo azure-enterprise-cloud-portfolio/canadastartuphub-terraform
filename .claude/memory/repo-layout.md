@@ -13,7 +13,7 @@ Two independent Terraform stacks, both targeting `ca-central-1`, prod-only:
 - `infra/` — the app stack: Amplify app + custom domain
   (`infra/modules/amplify-app`, `infra/modules/amplify-domain`). Applied by
   GitHub Actions (`.github/workflows/terraform.yml`) via the OIDC role;
-  state lives in the `canadastartuphub-tfstate` S3 bucket.
+  state lives in the `canadastartupdirectory-tfstate` S3 bucket.
 
 CI only triggers on `infra/**` changes — bootstrap changes never auto-apply.
 Local dev is native Windows, so bash-based pre-commit terraform hooks are
