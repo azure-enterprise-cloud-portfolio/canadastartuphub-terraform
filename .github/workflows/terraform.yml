@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # required to request the OIDC token for AWS auth
 
 concurrency:
   group: terraform-prod
@@ -39,8 +40,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Ensure state bucket exists
