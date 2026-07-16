@@ -1,8 +1,0 @@
-.terraform/
-*.tfstate
-*.tfstate.backup
-*.tfplan
-tfplan
-*.tfvars.local
-override.tf
-crash.log

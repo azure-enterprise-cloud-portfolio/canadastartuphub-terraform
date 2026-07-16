@@ -1,4 +1,4 @@
-## Bootstrap — GitHub OIDC for CI
+# Bootstrap — GitHub OIDC for CI
 
 Standalone stack that creates the GitHub OIDC identity provider and the
 `canadastartuphub-github-actions` IAM role that the Terraform pipeline
@@ -44,3 +44,4 @@ Then:
   main-branch applies). Fork PRs never receive OIDC tokens, so they cannot
   assume it.
 - The role has `AdministratorAccess`; scope it down if the account ever hosts
+  anything beyond this project.
