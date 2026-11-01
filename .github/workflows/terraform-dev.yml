@@ -1,0 +1,97 @@
+# DEV Terraform deployment: every push to develop that touches the DEV root,
+# the SES module or this workflow. Plans, then applies that exact saved plan.
+#
+# The job runs in the GitHub environment "dev". The DEV deploy role trusts only
+# the OIDC subject repo:<repo>:environment:dev, and its ARN is the
+# environment-scoped variable AWS_DEPLOY_ROLE_ARN. There are no stored AWS keys.
+name: Terraform DEV
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'terraform/environments/dev/**'
+      - 'terraform/modules/**'
+      - '.github/workflows/terraform-dev.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel a running apply; queue the next one behind it.
+concurrency:
+  group: terraform-dev
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: '1.15.8'
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+  AWS_REGION: ca-central-1
+
+jobs:
+  deploy:
+    name: Terraform apply (dev)
+    # A manual run from another branch must not deploy.
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: terraform/environments/dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Require the state bucket in backend.tf
+        run: |
+          if grep -q 'REPLACE_WITH_STATE_BUCKET_NAME' backend.tf; then
+            echo "::error::terraform/environments/dev/backend.tf still holds the placeholder bucket. See terraform/README.md, Manual values."
+            exit 1
+          fi
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC, DEV deploy role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: tf-dev-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -lockfile=readonly
+
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      - name: terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -no-color -detailed-exitcode -out=tfplan
+          code=$?
+          set -e
+          # 0 = no changes, 2 = changes, anything else = error.
+          if [ "$code" -eq 1 ]; then exit 1; fi
+          echo "changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Terraform plan — dev"
+            echo '```'
+            terraform show -no-color tfplan | head -c 60000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: terraform apply (saved plan)
+        if: steps.plan.outputs.changes == 'true'
+        run: terraform apply -no-color tfplan

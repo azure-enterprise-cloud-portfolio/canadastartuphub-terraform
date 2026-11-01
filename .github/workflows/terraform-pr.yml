@@ -1,0 +1,112 @@
+# Terraform checks on pull requests: fmt + validate + plan. NEVER applies.
+#
+# fmt/validate need no AWS access. The plan uses each account's read-only plan
+# role (repository variables AWS_PLAN_ROLE_ARN_DEV and AWS_PLAN_ROLE_ARN_PROD)
+# through GitHub OIDC — no stored AWS keys — and runs with -lock=false, so it
+# never writes to the state bucket.
+# Bootstrap roots are only validated here. The account owner applies them from
+# a local CLI; no workflow does.
+name: Terraform PR
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-*.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_VERSION: '1.15.8'
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+  AWS_REGION: ca-central-1
+
+jobs:
+  validate:
+    name: Terraform fmt and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: fmt + validate (all roots and the SES module)
+        run: bash terraform/scripts/validate.sh
+
+  plan:
+    name: Terraform plan (${{ matrix.environment }})
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skipped until both plan role ARNs are configured.
+    if: vars.AWS_PLAN_ROLE_ARN_DEV != '' && vars.AWS_PLAN_ROLE_ARN_PROD != ''
+    permissions:
+      contents: read
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, prod]
+
+    defaults:
+      run:
+        working-directory: terraform/environments/${{ matrix.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Check the state bucket was entered in backend.tf
+        id: backend
+        run: |
+          if grep -q 'REPLACE_WITH_STATE_BUCKET_NAME' backend.tf; then
+            echo "::notice::backend.tf still holds the placeholder bucket; plan skipped. See terraform/README.md, Manual values."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Terraform
+        if: steps.backend.outputs.ready == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC, read-only plan role)
+        if: steps.backend.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ matrix.environment == 'dev' && vars.AWS_PLAN_ROLE_ARN_DEV || vars.AWS_PLAN_ROLE_ARN_PROD }}
+          role-session-name: tf-pr-${{ matrix.environment }}-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        if: steps.backend.outputs.ready == 'true'
+        run: terraform init -lockfile=readonly
+
+      - name: terraform plan
+        if: steps.backend.outputs.ready == 'true'
+        run: |
+          terraform plan -lock=false -no-color -out=tfplan
+          {
+            echo "## Terraform plan — ${{ matrix.environment }}"
+            echo '```'
+            terraform show -no-color tfplan | head -c 60000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

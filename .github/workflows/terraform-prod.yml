@@ -1,0 +1,92 @@
+# PROD Terraform deployment: every push to main that touches the PROD root,
+# the SES module or this workflow.
+#
+#   plan  — prod account's read-only plan role (repository variable
+#           AWS_PLAN_ROLE_ARN_PROD). It writes the plan to the job summary and
+#           uploads the plan file.
+#   apply — runs in the GitHub environment "production", so it waits for a
+#           required reviewer to approve after reading the plan. It then applies
+#           exactly that saved plan with the PROD deploy role (the variable
+#           AWS_DEPLOY_ROLE_ARN on the production environment). That role
+#           trusts only the subject repo:<repo>:environment:production.
+#
+# If the state changes between plan and approval, Terraform rejects the saved
+# plan as stale instead of applying it. Re-run the workflow to plan again.
+name: Terraform PROD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/environments/prod/**'
+      - 'terraform/modules/**'
+      - '.github/workflows/terraform-prod.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-prod
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: '1.15.8'
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+  AWS_REGION: ca-central-1
+
+jobs:
+  plan:
+    name: Terraform plan (prod)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+
+    defaults:
+      run:
+        working-directory: terraform/environments/prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Require the state bucket in backend.tf
+        run: |
+          if grep -q 'REPLACE_WITH_STATE_BUCKET_NAME' backend.tf; then
+            echo "::error::terraform/environments/prod/backend.tf still holds the placeholder bucket. See terraform/README.md, Manual values."
+            exit 1
+          fi
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (OIDC, read-only plan role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN_PROD }}
+          role-session-name: tf-prod-plan-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -lockfile=readonly
+
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      - name: terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -lock=false -no-color -detailed-exitcode -out=tfplan
+          code=$?
+          set -e
+          if [ "$code" -eq 1 ]; then exit 1; fi
