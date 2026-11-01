@@ -1,16 +1,18 @@
+
 variable "aws_region" {
-  type    = string
-  default = "ca-central-1"
+  description = "AWS region for CTI production infrastructure."
+  type        = string
+  default     = "ca-central-1"
 }
 
 variable "github_repository" {
+  description = "GitHub repository authorized to assume the AWS production deployment role."
   type        = string
-  description = "This Terraform repo (owner/repo); GitHub Actions runs from it may assume the CI role."
   default     = "azure-enterprise-cloud-portfolio/canadastartuphub-terraform"
 }
 
 variable "create_github_oidc_provider" {
+  description = "Create the GitHub OIDC provider if it does not already exist in the Production AWS account."
   type        = bool
-  description = "Set false if the account already has a GitHub OIDC provider (only one is allowed per account)."
-  default     = true
+  default     = false
 }

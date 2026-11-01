@@ -1,25 +1,37 @@
+
 variable "github_repository" {
   type        = string
-  description = "GitHub repository allowed to assume the CI role, as owner/repo."
+  description = "GitHub repository authorized to assume the IAM role (owner/repo)."
 
   validation {
     condition     = can(regex("^[^/]+/[^/]+$", var.github_repository))
-    error_message = "Must be in owner/repo form, e.g. my-org/my-repo."
+    error_message = "Must be in owner/repo format."
   }
 }
 
 variable "role_name" {
   type        = string
-  description = "Name of the IAM role GitHub Actions assumes."
+  description = "IAM role name used by GitHub Actions."
+}
+
+variable "environment" {
+  type        = string
+  description = "GitHub Actions deployment environment: dev or prod."
+
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "Environment must be dev or prod."
+  }
 }
 
 variable "create_github_oidc_provider" {
   type        = bool
-  description = "Create the GitHub OIDC identity provider. Set false to reuse one that already exists in the account (only one is allowed per account)."
-  default     = true
+  description = "Create the GitHub OIDC provider or reuse the existing provider."
+  default     = false
 }
 
 variable "tags" {
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  description = "Tags applied to AWS resources."
+  default     = {}
 }

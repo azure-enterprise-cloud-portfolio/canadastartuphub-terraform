@@ -1,27 +1,29 @@
-# PROD Terraform deployment: every push to main that touches the PROD root,
-# the SES module or this workflow.
+
+# Canada Tech Intelligence — Production Terraform
 #
-#   plan  — prod account's read-only plan role (repository variable
-#           AWS_PLAN_ROLE_ARN_PROD). It writes the plan to the job summary and
-#           uploads the plan file.
-#   apply — runs in the GitHub environment "production", so it waits for a
-#           required reviewer to approve after reading the plan. It then applies
-#           exactly that saved plan with the PROD deploy role (the variable
-#           AWS_DEPLOY_ROLE_ARN on the production environment). That role
-#           trusts only the subject repo:<repo>:environment:production.
+# Release process:
+#   1. DEV deployment succeeds.
+#   2. Approved PR from develop is merged into main.
+#   3. Production Terraform plan runs.
+#   4. Reviewer approves production deployment.
+#   5. Terraform applies the saved plan.
 #
-# If the state changes between plan and approval, Terraform rejects the saved
-# plan as stale instead of applying it. Re-run the workflow to plan again.
+# PR-only merging and DEV-success verification
+# must be enforced before changes reach main.
+#
+# AWS Account: 285034436054
+# GitHub Environment: prod
+# Region: ca-central-1
+
 name: Terraform PROD
 
 on:
   push:
     branches: [main]
     paths:
-      - 'terraform/environments/prod/**'
-      - 'terraform/modules/**'
+      - 'infrastructure/envs/prod/**'
+      - 'infrastructure/modules/**'
       - '.github/workflows/terraform-prod.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,58 +37,215 @@ env:
   TF_IN_AUTOMATION: 'true'
   TF_INPUT: 'false'
   AWS_REGION: ca-central-1
+  AWS_ACCOUNT_ID: '285034436054'
 
 jobs:
   plan:
-    name: Terraform plan (prod)
-    if: github.ref == 'refs/heads/main'
+    name: Terraform Plan (PROD)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
     permissions:
       contents: read
       id-token: write
+
     outputs:
       changes: ${{ steps.plan.outputs.changes }}
 
     defaults:
       run:
-        working-directory: terraform/environments/prod
+        working-directory: infrastructure/envs/prod
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Require the state bucket in backend.tf
+      - name: Check Backend Configuration
         run: |
+          test -f backend.tf
+          test -f main.tf
+
           if grep -q 'REPLACE_WITH_STATE_BUCKET_NAME' backend.tf; then
-            echo "::error::terraform/environments/prod/backend.tf still holds the placeholder bucket. See terraform/README.md, Manual values."
+            echo "::error::Production backend not configured."
             exit 1
           fi
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Configure AWS credentials (OIDC, read-only plan role)
+      - name: Configure AWS Plan Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN_PROD }}
-          role-session-name: tf-prod-plan-${{ github.run_id }}
+          role-session-name: cti-prod-plan-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: '285034436054'
 
-      - name: terraform init
-        run: terraform init -lockfile=readonly
+      - name: Verify AWS Account
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity \
+            --query Account --output text)
 
-      - name: terraform validate
+          if [ "$ACCOUNT" != "$AWS_ACCOUNT_ID" ]; then
+            echo "::error::Incorrect AWS account."
+            exit 1
+          fi
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Terraform Validate
         run: terraform validate -no-color
 
-      - name: terraform plan
+      - name: Terraform Plan
         id: plan
+        shell: bash
         run: |
           set +e
-          terraform plan -lock=false -no-color -detailed-exitcode -out=tfplan
+
+          terraform plan \
+            -input=false \
+            -lock=false \
+            -no-color \
+            -detailed-exitcode \
+            -out=tfplan
+
           code=$?
           set -e
-          if [ "$code" -eq 1 ]; then exit 1; fi
+
+          if [ "$code" -eq 0 ]; then
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          elif [ "$code" -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Terraform plan failed."
+            exit 1
+          fi
+
+      - name: Review Plan and Block Destruction
+        run: |
+          terraform show -json tfplan | jq -r '
+            [.resource_changes[]?
+              | select(.change.actions != ["no-op"])
+              | {
+                  address: .address,
+                  actions: .change.actions
+                }
+            ] as $changes
+            |
+            "## CTI Production Terraform Plan",
+            "",
+            "AWS Account: 285034436054",
+            "Environment: prod",
+            "",
+            "### Resource changes",
+            "",
+            (
+              if ($changes | length) == 0 then
+                "No infrastructure changes."
+              else
+                (
+                  $changes[]
+                  | "- `\(.actions | join(", "))`: `\(.address)`"
+                )
+              end
+            )
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+          if ! terraform show -json tfplan | jq -e '
+            [
+              .resource_changes[]?
+              | select(
+                  (.change.actions | index("delete")) != null
+                )
+            ] | length == 0
+          ' > /dev/null; then
+            echo "::error::Destructive changes blocked."
+            exit 1
+          fi
+
+      - name: Upload Terraform Plan
+        if: steps.plan.outputs.changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cti-prod-tfplan
+          path: infrastructure/envs/prod/tfplan
+          retention-days: 1
+          if-no-files-found: error
+
+  apply:
+    name: Terraform Apply (PROD)
+    needs: plan
+    if: needs.plan.outputs.changes == 'true'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Protected production environment.
+    environment: prod
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: infrastructure/envs/prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS Deploy Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: cti-prod-apply-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: '285034436054'
+
+      - name: Verify AWS Account
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity \
+            --query Account --output text)
+
+          if [ "$ACCOUNT" != "$AWS_ACCOUNT_ID" ]; then
+            echo "::error::Incorrect AWS account."
+            exit 1
+          fi
+
+      - name: Terraform Init
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Download Approved Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: cti-prod-tfplan
+          path: infrastructure/envs/prod
+
+      - name: Terraform Apply
+        run: terraform apply -no-color -input=false tfplan
+
+      - name: Deployment Summary
+        if: success()
+        run: |
+          {
+            echo "## CTI Production Deployment"
+            echo ""
+            echo "Environment: prod"
+            echo "AWS Account: $AWS_ACCOUNT_ID"
+            echo "Result: Successfully applied"
+          } >> "$GITHUB_STEP_SUMMARY"
+

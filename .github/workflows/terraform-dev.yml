@@ -1,24 +1,28 @@
-# DEV Terraform deployment: every push to develop that touches the DEV root,
-# the SES module or this workflow. Plans, then applies that exact saved plan.
+
+# Canada Tech Intelligence — DEV Terraform Deployment
 #
-# The job runs in the GitHub environment "dev". The DEV deploy role trusts only
-# the OIDC subject repo:<repo>:environment:dev, and its ARN is the
-# environment-scoped variable AWS_DEPLOY_ROLE_ARN. There are no stored AWS keys.
+# Trigger: Approved PR merged into develop.
+# Environment: dev
+# AWS Account: 959856141465
+# Region: ca-central-1
+#
+# Terraform Plan -> Check -> Apply
+# Destructive changes are blocked.
+# GitHub OIDC authentication.
+
 name: Terraform DEV
 
 on:
   push:
     branches: [develop]
     paths:
-      - 'terraform/environments/dev/**'
-      - 'terraform/modules/**'
+      - 'infrastructure/envs/dev/**'
+      - 'infrastructure/modules/**'
       - '.github/workflows/terraform-dev.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
 
-# Never cancel a running apply; queue the next one behind it.
 concurrency:
   group: terraform-dev
   cancel-in-progress: false
@@ -28,70 +32,137 @@ env:
   TF_IN_AUTOMATION: 'true'
   TF_INPUT: 'false'
   AWS_REGION: ca-central-1
+  AWS_ACCOUNT_ID: '959856141465'
 
 jobs:
   deploy:
-    name: Terraform apply (dev)
-    # A manual run from another branch must not deploy.
+    name: Terraform Apply (DEV)
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: dev
+
     permissions:
       contents: read
       id-token: write
 
     defaults:
       run:
-        working-directory: terraform/environments/dev
+        working-directory: infrastructure/envs/dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Require the state bucket in backend.tf
-        run: |
-          if grep -q 'REPLACE_WITH_STATE_BUCKET_NAME' backend.tf; then
-            echo "::error::terraform/environments/dev/backend.tf still holds the placeholder bucket. See terraform/README.md, Manual values."
-            exit 1
-          fi
-
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Configure AWS credentials (OIDC, DEV deploy role)
+      - name: Check Terraform Root
+        run: |
+          test -f main.tf
+          test -f backend.tf
+
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          role-session-name: tf-dev-${{ github.run_id }}
+          role-session-name: cti-dev-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: '959856141465'
 
-      - name: terraform init
-        run: terraform init -lockfile=readonly
+      - name: Verify AWS Account
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          if [ "$ACCOUNT" != "$AWS_ACCOUNT_ID" ]; then
+            echo "::error::Incorrect AWS account."
+            exit 1
+          fi
 
-      - name: terraform validate
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: terraform init -lockfile=readonly -input=false
+
+      - name: Terraform Validate
         run: terraform validate -no-color
 
-      - name: terraform plan
+      - name: Terraform Plan
         id: plan
         run: |
           set +e
-          terraform plan -no-color -detailed-exitcode -out=tfplan
+
+          terraform plan \
+            -no-color \
+            -input=false \
+            -detailed-exitcode \
+            -out=tfplan
+
           code=$?
           set -e
-          # 0 = no changes, 2 = changes, anything else = error.
-          if [ "$code" -eq 1 ]; then exit 1; fi
-          echo "changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+          if [ "$code" -eq 0 ]; then
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          elif [ "$code" -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Terraform plan failed."
+            exit 1
+          fi
+
+      - name: Review Plan and Block Destruction
+        run: |
+          terraform show -json tfplan | jq -r '
+            [.resource_changes[]?
+              | select(.change.actions != ["no-op"])
+              | {
+                  address: .address,
+                  actions: .change.actions
+                }
+            ] as $changes
+            |
+            "## CTI Terraform DEV Plan",
+            "",
+            "### Resource changes",
+            (
+              if ($changes | length) == 0 then
+                "No infrastructure changes."
+              else
+                (
+                  $changes[]
+                  | "- `\(.actions | join(", "))`: `\(.address)`"
+                )
+              end
+            )
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+          terraform show -json tfplan | jq -e '
+            [
+              .resource_changes[]?
+              | select(
+                  (.change.actions | index("delete")) != null
+                )
+            ] | length == 0
+          ' > /dev/null || {
+            echo "::error::Destructive changes are blocked."
+            exit 1
+          }
+
+      - name: Terraform Apply
+        if: steps.plan.outputs.changes == 'true'
+        run: terraform apply -no-color -input=false tfplan
+
+      - name: Deployment Summary
+        if: success()
+        run: |
           {
-            echo "## Terraform plan — dev"
-            echo '```'
-            terraform show -no-color tfplan | head -c 60000
-            echo '```'
+            echo "## CTI DEV Deployment"
+            echo "Environment: dev"
+            echo "AWS Account: $AWS_ACCOUNT_ID"
+            echo "Result: Successful"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: terraform apply (saved plan)
-        if: steps.plan.outputs.changes == 'true'
-        run: terraform apply -no-color tfplan
+

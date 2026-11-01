@@ -1,25 +1,27 @@
-# Terraform checks on pull requests: fmt + validate + plan. NEVER applies.
+
+# CTI Terraform PR Validation and Plan
 #
-# fmt/validate need no AWS access. The plan uses each account's read-only plan
-# role (repository variables AWS_PLAN_ROLE_ARN_DEV and AWS_PLAN_ROLE_ARN_PROD)
-# through GitHub OIDC — no stored AWS keys — and runs with -lock=false, so it
-# never writes to the state bucket.
-# Bootstrap roots are only validated here. The account owner applies them from
-# a local CLI; no workflow does.
+# PR to develop -> Dev AWS account
+# PR to main    -> Prod AWS account
+#
+# No terraform apply.
+# Plans are for review only.
+
 name: Terraform PR
 
 on:
   pull_request:
     branches: [develop, main]
     paths:
-      - 'terraform/**'
-      - '.github/workflows/terraform-*.yml'
+      - 'infrastructure/**'
+      - 'bootstrap/**'
+      - '.github/workflows/terraform-pr.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: terraform-pr-${{ github.ref }}
+  group: terraform-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -30,7 +32,7 @@ env:
 
 jobs:
   validate:
-    name: Terraform fmt and validate
+    name: Terraform Format and Validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -38,75 +40,157 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: fmt + validate (all roots and the SES module)
-        run: bash terraform/scripts/validate.sh
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: bash infrastructure/scripts/validate.sh
 
   plan:
-    name: Terraform plan (${{ matrix.environment }})
+    name: Terraform Plan
     needs: validate
+
+    # Do not grant AWS credentials to forked pull requests.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Skipped until both plan role ARNs are configured.
-    if: vars.AWS_PLAN_ROLE_ARN_DEV != '' && vars.AWS_PLAN_ROLE_ARN_PROD != ''
+    timeout-minutes: 20
+
+    environment: pr-plan
+
     permissions:
       contents: read
       id-token: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: [dev, prod]
+    env:
+      TF_ROOT: ${{ github.base_ref == 'main' && 'infrastructure/envs/prod' || 'infrastructure/envs/dev' }}
+      EXPECTED_ACCOUNT: ${{ github.base_ref == 'main' && '285034436054' || '959856141465' }}
 
     defaults:
       run:
-        working-directory: terraform/environments/${{ matrix.environment }}
+        shell: bash
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Check the state bucket was entered in backend.tf
-        id: backend
-        run: |
-          if grep -q 'REPLACE_WITH_STATE_BUCKET_NAME' backend.tf; then
-            echo "::notice::backend.tf still holds the placeholder bucket; plan skipped. See terraform/README.md, Manual values."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Set up Terraform
-        if: steps.backend.outputs.ready == 'true'
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Configure AWS credentials (OIDC, read-only plan role)
-        if: steps.backend.outputs.ready == 'true'
+      - name: Verify Terraform Root
+        run: |
+          if [ ! -f "$TF_ROOT/backend.tf" ]; then
+            echo "::error::Missing Terraform root: $TF_ROOT"
+            exit 1
+          fi
+
+      - name: Configure AWS Plan Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ matrix.environment == 'dev' && vars.AWS_PLAN_ROLE_ARN_DEV || vars.AWS_PLAN_ROLE_ARN_PROD }}
-          role-session-name: tf-pr-${{ matrix.environment }}-${{ github.run_id }}
+          role-to-assume: ${{ github.base_ref == 'main' && vars.AWS_PLAN_ROLE_ARN_PROD || vars.AWS_PLAN_ROLE_ARN_DEV }}
           aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.EXPECTED_ACCOUNT }}
 
-      - name: terraform init
-        if: steps.backend.outputs.ready == 'true'
-        run: terraform init -lockfile=readonly
-
-      - name: terraform plan
-        if: steps.backend.outputs.ready == 'true'
+      - name: Verify AWS Account
         run: |
-          terraform plan -lock=false -no-color -out=tfplan
+          ACCOUNT=$(aws sts get-caller-identity \
+            --query Account --output text)
+
+          if [ "$ACCOUNT" != "$EXPECTED_ACCOUNT" ]; then
+            echo "::error::Incorrect AWS account"
+            exit 1
+          fi
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_ROOT }}
+        run: terraform init -input=false -lockfile=readonly
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
+          set +e
+
+          terraform plan \
+            -lock=false \
+            -input=false \
+            -no-color \
+            -detailed-exitcode \
+            -out=tfplan
+
+          code=$?
+          set -e
+
+          if [ "$code" -eq 1 ]; then
+            exit 1
+          elif [ "$code" -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" -eq 0 ]; then
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$code"
+          fi
+
+      - name: Terraform Plan Summary
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
           {
-            echo "## Terraform plan — ${{ matrix.environment }}"
-            echo '```'
-            terraform show -no-color tfplan | head -c 60000
-            echo '```'
+            echo "## CTI Terraform PR Plan"
+            echo ""
+            echo "Target: ${{ github.base_ref }}"
+            echo "AWS Account: $EXPECTED_ACCOUNT"
+            echo ""
           } >> "$GITHUB_STEP_SUMMARY"
+
+          terraform show -json tfplan | jq -r '
+            [.resource_changes[]?
+              | select(.change.actions != ["no-op"])
+              | {
+                  address: .address,
+                  actions: .change.actions
+                }
+            ] as $changes
+            |
+            "### Planned resource changes",
+            "",
+            "Create: \(
+              [$changes[] | select(.actions == ["create"])]
+              | length
+            )",
+            "Update: \(
+              [$changes[] | select(.actions == ["update"])]
+              | length
+            )",
+            "Delete or replace: \(
+              [$changes[]
+                | select(.actions | index("delete"))]
+              | length
+            )",
+            "",
+            "### Resource actions",
+            "",
+            (
+              if ($changes | length) == 0 then
+                "No resource changes."
+              else
+                (
+                  $changes[]
+                  | "- `\(.actions | join(", "))`: `\(.address)`"
+                )
+              end
+            )
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Review only — no apply performed." \
+            >> "$GITHUB_STEP_SUMMARY"
+
