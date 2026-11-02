@@ -1,9 +1,10 @@
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.10" # needed for S3 native state locking (use_lockfile)
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.82.0"
+      version = "~> 6.0"
     }
   }
 }
