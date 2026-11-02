@@ -1,4 +1,3 @@
-
 # GitHub Actions OIDC federation with AWS IAM.
 # Uses short-lived credentials instead of AWS access keys.
 
@@ -22,6 +21,13 @@ locals {
     ? aws_iam_openid_connect_provider.github[0].arn
     : data.aws_iam_openid_connect_provider.github[0].arn
   )
+
+  # GitHub sends either the classic subject (repo:owner/repo:...) or, when
+  # immutable subjects are enabled, repo:owner@ownerId/repo@repoId:...
+  github_subjects = compact([
+    "repo:${var.github_repository}:environment:${var.environment}",
+    var.github_sub_claim_prefix == null ? "" : "${var.github_sub_claim_prefix}:environment:${var.environment}",
+  ])
 }
 
 data "aws_iam_policy_document" "github_actions_assume" {
@@ -43,9 +49,7 @@ data "aws_iam_policy_document" "github_actions_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
-        "repo:${var.github_repository}:environment:${var.environment}"
-      ]
+      values   = local.github_subjects
     }
   }
 }

@@ -1,4 +1,3 @@
-
 variable "github_repository" {
   type        = string
   description = "GitHub repository authorized to assume the IAM role (owner/repo)."
@@ -34,4 +33,15 @@ variable "tags" {
   type        = map(string)
   description = "Tags applied to AWS resources."
   default     = {}
+}
+
+variable "github_sub_claim_prefix" {
+  type        = string
+  description = "GitHub OIDC immutable subject prefix (repo:owner@ownerId/repo@repoId). Null = classic subject only."
+  default     = null
+
+  validation {
+    condition     = var.github_sub_claim_prefix == null || can(regex("^repo:[^/@]+@[0-9]+/[^/@]+@[0-9]+$", var.github_sub_claim_prefix))
+    error_message = "Must look like repo:owner@ownerId/repo@repoId (from gh api repos/<owner>/<repo>/actions/oidc/customization/sub)."
+  }
 }
