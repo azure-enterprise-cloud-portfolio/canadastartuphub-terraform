@@ -31,3 +31,34 @@ variable "dev_domain" {
   type        = string
   default     = "dev.canadatechintelligence.ca"
 }
+
+# --- SES -----------------------------------------------------------------------
+variable "ses_from_address" {
+  description = "The only From address the dev application may send as."
+  type        = string
+  default     = "contact@dev.canadatechintelligence.ca"
+}
+
+variable "ses_app_inbox" {
+  description = "Real mailbox the dev application delivers to."
+  type        = string
+  default     = "contact@canadatechintelligence.ca"
+}
+
+variable "ses_alert_email" {
+  description = "Receives SES reputation alarms. Null = no emails from dev."
+  type        = string
+  default     = null
+}
+
+variable "ses_test_recipients" {
+  description = "Addresses dev may send to while in the SES sandbox."
+  type        = list(string)
+  default     = ["contact@canadatechintelligence.ca"]
+}
+
+variable "ses_create_amplify_compute_role" {
+  description = "Create an Amplify compute role for a dev Amplify app."
+  type        = bool
+  default     = false
+}
