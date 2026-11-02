@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -7,8 +6,8 @@ roots=(
   "bootstrap/State_Bucket/prod"
   "bootstrap/oidc/envs/dev"
   "bootstrap/oidc/envs/prod"
-  "terraform/environments/dev"
-  "terraform/environments/prod"
+  "infrastructure/envs/dev"
+  "infrastructure/envs/prod"
 )
 
 for root in "${roots[@]}"; do
