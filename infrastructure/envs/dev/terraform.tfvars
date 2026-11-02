@@ -10,7 +10,7 @@ dev_domain = "dev.canadatechintelligence.ca"
 ses_from_address                = "contact@dev.canadatechintelligence.ca" # only address dev may send from
 ses_app_inbox                   = "contact@canadatechintelligence.ca"     # where the app delivers mail
 ses_alert_email                 = null                                    # no alarm emails from dev
-ses_create_amplify_compute_role = false                                   # true once a dev Amplify app exists
+ses_create_amplify_compute_role = true                                    # role for the dev Amplify app (console)
 
 # --- SES sandbox: verified recipients (ses.tf) ---------------------------------
 ses_test_recipients = ["contact@canadatechintelligence.ca"]

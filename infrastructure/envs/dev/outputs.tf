@@ -16,6 +16,11 @@ output "ses_send_policy_arn" {
   value = module.ses.send_policy_arn
 }
 
+output "ses_amplify_compute_role_arn" {
+  description = "Set as the compute role on the dev Amplify app (console)."
+  value       = module.ses.amplify_compute_role_arn
+}
+
 output "ses_app_environment_variables" {
   value = module.ses.app_environment_variables
 }
