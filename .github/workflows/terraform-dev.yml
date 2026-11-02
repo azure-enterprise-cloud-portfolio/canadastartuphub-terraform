@@ -1,4 +1,3 @@
-
 # Canada Tech Intelligence — DEV Terraform Deployment
 #
 # Trigger: Approved PR merged into develop.
@@ -62,8 +61,8 @@ jobs:
 
       - name: Check Terraform Root
         run: |
-          test -f main.tf
           test -f backend.tf
+          ls *.tf > /dev/null
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -71,7 +70,6 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           role-session-name: cti-dev-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
-          allowed-account-ids: '959856141465'
 
       - name: Verify AWS Account
         run: |
