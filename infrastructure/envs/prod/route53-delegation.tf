@@ -1,4 +1,4 @@
-﻿# dev.canadatechintelligence.ca delegation
+# dev.canadatechintelligence.ca delegation
 # NS record in the prod zone pointing to the hosted zone in the dev account (959856141465).
 module "dev_delegation" {
   source = "../../modules/route53-delegation"
