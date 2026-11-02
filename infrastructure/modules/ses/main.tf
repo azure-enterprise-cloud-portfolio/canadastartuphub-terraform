@@ -148,21 +148,27 @@ resource "aws_cloudwatch_metric_alarm" "complaint_rate" {
   tags                = var.tags
 }
 
-# --- Least-privilege send policy: only from_address, only this config set ------
+# --- Send policy ----------------------------------------------------------------
+# Locked to from_address (bare or with a display name) and this configuration set.
+# Resources include every identity in the account because, in the SES sandbox,
+# IAM also checks ses:SendEmail against the verified *recipient* identity.
 data "aws_iam_policy_document" "send" {
   statement {
     sid     = "SendAsFromAddressOnly"
     effect  = "Allow"
     actions = ["ses:SendEmail", "ses:SendRawEmail"]
     resources = [
-      aws_sesv2_email_identity.this.arn,
+      "arn:aws:ses:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:identity/*",
       aws_sesv2_configuration_set.this.arn,
     ]
 
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "ses:FromAddress"
-      values   = [var.from_address]
+      values = [
+        var.from_address,
+        "*<${var.from_address}>",
+      ]
     }
   }
 }
