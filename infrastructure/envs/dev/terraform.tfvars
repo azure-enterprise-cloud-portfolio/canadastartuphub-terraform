@@ -1,4 +1,16 @@
+# --- General (provider + tags) -------------------------------------------------
 aws_region  = "ca-central-1"
 project     = "canadatechintelligence-platform"
 environment = "dev"
-dev_domain  = "dev.canadatechintelligence.ca"
+
+# --- DNS: dev hosted zone (modules/route53-zone) -------------------------------
+dev_domain = "dev.canadatechintelligence.ca"
+
+# --- SES: email sending (modules/ses) ------------------------------------------
+ses_from_address                = "contact@dev.canadatechintelligence.ca" # only address dev may send from
+ses_app_inbox                   = "contact@canadatechintelligence.ca"     # where the app delivers mail
+ses_alert_email                 = null                                    # no alarm emails from dev
+ses_create_amplify_compute_role = false                                   # true once a dev Amplify app exists
+
+# --- SES sandbox: verified recipients (ses.tf) ---------------------------------
+ses_test_recipients = ["contact@canadatechintelligence.ca"]
