@@ -1,30 +1,12 @@
-
-variable "project" {
-  description = "CTI project identifier"
-  type        = string
-}
-
-variable "environment" {
-  description = "Deployment environment: dev or prod"
-  type        = string
-
-  validation {
-    condition = contains(
-      ["dev", "prod"],
-      var.environment
-    )
-
-    error_message = "Environment must be dev or prod."
-  }
-}
-
-
-# --- Google OAuth Authentication ----------------------------
+# ------------------------------------------------------------
+# Google OAuth Authentication
+# ------------------------------------------------------------
 
 variable "enable_google_login" {
   description = "Enable Google Sign-In"
   type        = bool
   default     = false
+  nullable    = false
 }
 
 variable "google_client_id" {
@@ -32,6 +14,18 @@ variable "google_client_id" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition = (
+      !var.enable_google_login ||
+      (
+        var.google_client_id != null &&
+        try(length(trimspace(var.google_client_id)) > 0, false)
+      )
+    )
+
+    error_message = "Google Client ID is required when Google Login is enabled."
+  }
 }
 
 variable "google_client_secret" {
@@ -39,17 +33,16 @@ variable "google_client_secret" {
   type        = string
   default     = null
   sensitive   = true
-}
 
-variable "oauth_callback_urls" {
-  description = "Cognito OAuth callback URLs"
-  type        = list(string)
-  default     = []
-}
+  validation {
+    condition = (
+      !var.enable_google_login ||
+      (
+        var.google_client_secret != null &&
+        try(length(trimspace(var.google_client_secret)) > 0, false)
+      )
+    )
 
-variable "oauth_logout_urls" {
-  description = "Cognito OAuth logout URLs"
-  type        = list(string)
-  default     = []
+    error_message = "Google Client Secret is required when Google Login is enabled."
+  }
 }
-

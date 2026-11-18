@@ -73,19 +73,28 @@ variable "ses_create_amplify_compute_role" {
 }
 
 
-# --- Google OAuth ------------------------------------------------------------
+# --- Google OAuth --------------------------------------------
 
 variable "google_client_id" {
   description = "Google OAuth Client ID for CTI development."
   type        = string
-  default     = null
   sensitive   = true
+  nullable    = false
+
+  validation {
+    condition     = length(trimspace(var.google_client_id)) > 0
+    error_message = "DEV Google OAuth Client ID must not be empty."
+  }
 }
 
 variable "google_client_secret" {
   description = "Google OAuth Client Secret for CTI development."
   type        = string
-  default     = null
   sensitive   = true
-}
+  nullable    = false
 
+  validation {
+    condition     = length(trimspace(var.google_client_secret)) > 0
+    error_message = "DEV Google OAuth Client Secret must not be empty."
+  }
+}
