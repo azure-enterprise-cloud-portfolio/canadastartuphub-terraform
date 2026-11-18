@@ -63,6 +63,7 @@ variable "ses_create_amplify_compute_role" {
   default     = false
 }
 
+# --- Amazon Cognito ------------------------------------------------------------
 
 output "cognito_user_pool_id" {
   description = "CTI development Cognito User Pool ID"
