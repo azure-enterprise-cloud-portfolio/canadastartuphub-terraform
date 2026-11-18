@@ -153,3 +153,16 @@ resource "aws_cognito_user_group" "admin" {
 
   precedence = 1
 }
+
+
+# ------------------------------------------------------------
+# Cognito Domain for Google OAuth
+# ------------------------------------------------------------
+
+resource "aws_cognito_user_pool_domain" "this" {
+  count = var.enable_google_login ? 1 : 0
+
+  domain       = "cti-${var.environment}-auth"
+  user_pool_id = aws_cognito_user_pool.this.id
+}
+
