@@ -72,16 +72,20 @@ variable "ses_create_amplify_compute_role" {
   default     = false
 }
 
-# --- Google OAuth --------------------------------------------
+
+# --- Google OAuth ------------------------------------------------------------
 
 variable "google_client_id" {
   description = "Google OAuth Client ID for CTI development."
   type        = string
+  default     = null
   sensitive   = true
 }
 
 variable "google_client_secret" {
   description = "Google OAuth Client Secret for CTI development."
   type        = string
+  default     = null
   sensitive   = true
 }
+
