@@ -6,7 +6,7 @@ module "cognito" {
   environment = var.environment
 
   # Google Sign-In
-  enable_google_login  = false
+  enable_google_login  = true
   google_client_id     = var.google_client_id
   google_client_secret = var.google_client_secret
 
