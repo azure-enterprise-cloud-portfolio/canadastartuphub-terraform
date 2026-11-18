@@ -1,5 +1,30 @@
+
+# ============================================================
+# Canada Tech Intelligence
+# Amazon Cognito Module - Terraform Variables
+# ============================================================
+
 # ------------------------------------------------------------
-# Google OAuth Authentication
+# 1. General Configuration
+# ------------------------------------------------------------
+
+variable "project" {
+  description = "CTI project identifier"
+  type        = string
+}
+
+variable "environment" {
+  description = "Deployment environment: dev or prod"
+  type        = string
+
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "Environment must be dev or prod."
+  }
+}
+
+# ------------------------------------------------------------
+# 2. Google OAuth Authentication
 # ------------------------------------------------------------
 
 variable "enable_google_login" {
@@ -45,4 +70,20 @@ variable "google_client_secret" {
 
     error_message = "Google Client Secret is required when Google Login is enabled."
   }
+}
+
+# ------------------------------------------------------------
+# 3. Cognito OAuth Callback Configuration
+# ------------------------------------------------------------
+
+variable "oauth_callback_urls" {
+  description = "Allowed callback URLs for Cognito OAuth"
+  type        = list(string)
+  default     = []
+}
+
+variable "oauth_logout_urls" {
+  description = "Allowed logout redirect URLs for Cognito OAuth"
+  type        = list(string)
+  default     = []
 }
