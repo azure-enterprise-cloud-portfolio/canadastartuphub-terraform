@@ -62,3 +62,25 @@ variable "ses_create_amplify_compute_role" {
   type        = bool
   default     = false
 }
+
+# --- Amazon Cognito ------------------------------------------------------------
+
+output "cognito_user_pool_id" {
+  description = "CTI development Cognito User Pool ID"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_user_pool_client_id" {
+  description = "CTI development web client ID"
+  value       = module.cognito.user_pool_client_id
+}
+
+output "cognito_user_pool_arn" {
+  description = "CTI development User Pool ARN"
+  value       = module.cognito.user_pool_arn
+}
+
+output "cognito_admin_group_name" {
+  description = "CTI Cognito administrator group"
+  value       = module.cognito.admin_group_name
+}

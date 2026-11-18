@@ -4,6 +4,28 @@ variable "aws_region" {
   default     = "ca-central-1"
 }
 
+variable "project" {
+  description = "Project name, used in tags."
+  type        = string
+  default     = "canadatechintelligence-platform"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$", var.project))
+    error_message = "project must be lowercase letters, numbers and hyphens (3-40 chars), no spaces."
+  }
+}
+
+variable "environment" {
+  description = "Environment name."
+  type        = string
+  default     = "prod"
+
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "environment must be dev or prod."
+  }
+}
+
 variable "domain" {
   description = "Primary domain (existing public hosted zone in this account)."
   type        = string
@@ -59,4 +81,27 @@ variable "ses_create_amplify_compute_role" {
   description = "Create an Amplify compute role with SES send permission."
   type        = bool
   default     = true
+}
+
+
+# --- Amazon Cognito ------------------------------------------------------------
+
+output "cognito_user_pool_id" {
+  description = "CTI development Cognito User Pool ID"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_user_pool_client_id" {
+  description = "CTI development web client ID"
+  value       = module.cognito.user_pool_client_id
+}
+
+output "cognito_user_pool_arn" {
+  description = "CTI development User Pool ARN"
+  value       = module.cognito.user_pool_arn
+}
+
+output "cognito_admin_group_name" {
+  description = "CTI Cognito administrator group"
+  value       = module.cognito.admin_group_name
 }
