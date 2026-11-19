@@ -20,4 +20,4 @@ ses_create_amplify_compute_role = true                                # attach t
 
 # --- LinkedIn OIDC ------------------------------------------
 
-enable_linkedin_login = true
+enable_linkedin_login = false
