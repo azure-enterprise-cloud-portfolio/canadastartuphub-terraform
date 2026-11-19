@@ -4,56 +4,77 @@
 # DEV Cognito Authentication
 # ============================================================
 #
-# This is the DEV environment. The user pool, the Google identity provider,
-# the hosted-UI domain (cti-dev-auth) and the web app client all live here and
-# are the ONLY Cognito resources this project is designed to have — see
-# CLAUDE.md in the application repo.
+# This configuration manages Cognito authentication for DEV.
 #
-# The callback and logout URLs below are DEV URLs. They were production URLs
-# until 2026-11-18, which is why Google sign-in could not work on dev at all:
-# Cognito validates `redirect_uri` against this list before it does anything
-# else, so every /oauth2/authorize request from dev.canadatechintelligence.ca
-# was answered with `error=redirect_mismatch`. A callback list is per-app-client
-# and per-environment; it is never shared between dev and prod.
+# DEV and PROD use separate:
+# - AWS accounts
+# - Cognito User Pools
+# - Cognito App Clients
+# - Google OAuth credentials
+# - Callback and logout URLs
+#
+# DEV Website:
+# https://dev.canadatechintelligence.ca
+#
+# DEV Cognito Domain:
+# https://cti-dev-auth.auth.ca-central-1.amazoncognito.com
+#
+# AWS Region: ca-central-1
+# ============================================================
 
 module "cognito" {
   source = "../../modules/cognito"
 
+  # ----------------------------------------------------------
+  # 1. General Configuration
+  # ----------------------------------------------------------
+
   project     = var.project
   environment = var.environment
 
-  # Google Sign-In
-  enable_google_login  = true
+  # ----------------------------------------------------------
+  # 2. Google OAuth Authentication
+  # ----------------------------------------------------------
+
+  enable_google_login = true
+
+  # Credentials supplied securely through Terraform variables.
+  # Never hardcode Google OAuth credentials here.
+
   google_client_id     = var.google_client_id
   google_client_secret = var.google_client_secret
 
   # ----------------------------------------------------------
-  # DEV OAuth callback URLs
+  # 3. DEV OAuth Callback URLs
   # ----------------------------------------------------------
-  # Cognito requires an EXACT string match, so the path matters: the
-  # application completes the flow at /auth/callback and nowhere else.
   #
-  # localhost is here so the flow can be exercised against `npm run build &&
-  # npm start` before a deploy. It is safe on this list and only on this list:
-  # it is a DEV-only pool, and Amplify's own redirect resolver picks an entry by
-  # matching the browser's hostname, so a localhost entry is never selected
-  # from a deployed page. Drop it if DEV should refuse local sign-in.
+  # Cognito requires an exact redirect_uri match.
+  #
+  # Production DEV website:
+  # https://dev.canadatechintelligence.ca
+  #
+  # Local development:
+  # http://localhost:3000
+  #
+  # These URLs must also be supported by the application's
+  # OAuth callback implementation.
+  # ----------------------------------------------------------
+
   oauth_callback_urls = [
     "https://dev.canadatechintelligence.ca/auth/callback",
     "http://localhost:3000/auth/callback",
   ]
 
   # ----------------------------------------------------------
-  # DEV logout redirect URLs
+  # 4. DEV OAuth Logout URLs
   # ----------------------------------------------------------
-  # Where Cognito's hosted /logout endpoint returns a customer who signed in
-  # through Google. Amplify only visits that endpoint for a federated session —
-  # an email/password sign-out never leaves the site — and it is what clears
-  # the hosted-UI session cookie, without which "Continue with Google" would
-  # silently re-authenticate the previous account on a shared computer.
   #
-  # No query string: Cognito matches `logout_uri` exactly, so the landing page
-  # cannot carry its own ?reason= parameter.
+  # After federated logout, Cognito redirects the user
+  # to one of the registered logout URLs.
+  #
+  # Logout URLs must match the requested logout_uri.
+  # ----------------------------------------------------------
+
   oauth_logout_urls = [
     "https://dev.canadatechintelligence.ca/login",
     "http://localhost:3000/login",
