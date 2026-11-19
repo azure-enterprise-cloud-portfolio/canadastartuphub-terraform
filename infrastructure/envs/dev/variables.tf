@@ -1,3 +1,11 @@
+
+# ============================================================
+# Canada Tech Intelligence
+# Development Environment - Terraform Variables
+# ============================================================
+
+# --- AWS Configuration ---------------------------------------
+
 variable "aws_region" {
   description = "AWS region for this environment."
   type        = string
@@ -32,7 +40,8 @@ variable "dev_domain" {
   default     = "dev.canadatechintelligence.ca"
 }
 
-# --- SES -----------------------------------------------------------------------
+# --- Amazon SES ----------------------------------------------
+
 variable "ses_from_address" {
   description = "The only From address the dev application may send as."
   type        = string
@@ -63,24 +72,29 @@ variable "ses_create_amplify_compute_role" {
   default     = false
 }
 
-# --- Amazon Cognito ------------------------------------------------------------
 
-output "cognito_user_pool_id" {
-  description = "CTI development Cognito User Pool ID"
-  value       = module.cognito.user_pool_id
+# --- Google OAuth --------------------------------------------
+
+variable "google_client_id" {
+  description = "Google OAuth Client ID for CTI development."
+  type        = string
+  sensitive   = true
+  nullable    = false
+
+  validation {
+    condition     = length(trimspace(var.google_client_id)) > 0
+    error_message = "DEV Google OAuth Client ID must not be empty."
+  }
 }
 
-output "cognito_user_pool_client_id" {
-  description = "CTI development web client ID"
-  value       = module.cognito.user_pool_client_id
-}
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret for CTI development."
+  type        = string
+  sensitive   = true
+  nullable    = false
 
-output "cognito_user_pool_arn" {
-  description = "CTI development User Pool ARN"
-  value       = module.cognito.user_pool_arn
-}
-
-output "cognito_admin_group_name" {
-  description = "CTI Cognito administrator group"
-  value       = module.cognito.admin_group_name
+  validation {
+    condition     = length(trimspace(var.google_client_secret)) > 0
+    error_message = "DEV Google OAuth Client Secret must not be empty."
+  }
 }

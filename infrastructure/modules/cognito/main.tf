@@ -1,4 +1,13 @@
 
+# ============================================================
+# Canada Tech Intelligence
+# Amazon Cognito User Pool and Authentication
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. Cognito User Pool
+# ------------------------------------------------------------
+
 resource "aws_cognito_user_pool" "this" {
   name = "cti-${var.environment}-users"
 
@@ -53,17 +62,47 @@ resource "aws_cognito_user_pool" "this" {
   }
 }
 
+# ------------------------------------------------------------
+# 2. Google Identity Provider
+# ------------------------------------------------------------
+
+resource "aws_cognito_identity_provider" "google" {
+  count = var.enable_google_login ? 1 : 0
+
+  user_pool_id  = aws_cognito_user_pool.this.id
+  provider_name = "Google"
+  provider_type = "Google"
+
+  provider_details = {
+    client_id        = var.google_client_id
+    client_secret    = var.google_client_secret
+    authorize_scopes = "openid email profile"
+  }
+
+  attribute_mapping = {
+    email          = "email"
+    email_verified = "email_verified"
+  }
+}
+
+# ------------------------------------------------------------
+# 3. Cognito Web Application Client
+# ------------------------------------------------------------
+
 resource "aws_cognito_user_pool_client" "web" {
   name         = "cti-${var.environment}-web"
   user_pool_id = aws_cognito_user_pool.this.id
 
+  # Public browser client
   generate_secret = false
 
+  # Existing email/password authentication
   explicit_auth_flows = [
     "ALLOW_USER_SRP_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH"
   ]
 
+  # Existing token validity
   access_token_validity  = 1
   id_token_validity      = 1
   refresh_token_validity = 7
@@ -76,7 +115,35 @@ resource "aws_cognito_user_pool_client" "web" {
 
   enable_token_revocation       = true
   prevent_user_existence_errors = "ENABLED"
+
+  # ----------------------------------------------------------
+  # Google OAuth
+  # ----------------------------------------------------------
+
+  supported_identity_providers = var.enable_google_login ? [
+    "COGNITO",
+    aws_cognito_identity_provider.google[0].provider_name
+  ] : ["COGNITO"]
+
+  allowed_oauth_flows_user_pool_client = var.enable_google_login
+
+  allowed_oauth_flows = var.enable_google_login ? [
+    "code"
+  ] : []
+
+  allowed_oauth_scopes = var.enable_google_login ? [
+    "openid",
+    "email",
+    "profile"
+  ] : []
+
+  callback_urls = var.oauth_callback_urls
+  logout_urls   = var.oauth_logout_urls
 }
+
+# ------------------------------------------------------------
+# 4. Administrator Group
+# ------------------------------------------------------------
 
 resource "aws_cognito_user_group" "admin" {
   name         = "CTI_Admin"
@@ -86,3 +153,16 @@ resource "aws_cognito_user_group" "admin" {
 
   precedence = 1
 }
+
+
+# ------------------------------------------------------------
+# Cognito Domain for Google OAuth
+# ------------------------------------------------------------
+
+resource "aws_cognito_user_pool_domain" "this" {
+  count = var.enable_google_login ? 1 : 0
+
+  domain       = "cti-${var.environment}-auth"
+  user_pool_id = aws_cognito_user_pool.this.id
+}
+

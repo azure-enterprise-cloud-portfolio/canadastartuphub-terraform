@@ -41,6 +41,11 @@ jobs:
     timeout-minutes: 20
     environment: dev
 
+    # Google OAuth credentials for Terraform (from the dev environment secrets)
+    env:
+      TF_VAR_google_client_id: ${{ secrets.GOOGLE_CLIENT_ID }}
+      TF_VAR_google_client_secret: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+
     permissions:
       contents: read
       id-token: write
@@ -52,6 +57,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      
+      - name: Verify Google OAuth Credentials
+        shell: bash
+        run: |
+          if [[ -z "${TF_VAR_google_client_id//[[:space:]]/}" ]]; then
+            echo "::error::GOOGLE_CLIENT_ID is missing or empty."
+            exit 1
+          fi
+
+          if [[ -z "${TF_VAR_google_client_secret//[[:space:]]/}" ]]; then
+            echo "::error::GOOGLE_CLIENT_SECRET is missing or empty."
+            exit 1
+          fi
+
+          echo "Google OAuth credentials are configured."
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
