@@ -18,6 +18,6 @@ ses_alert_email                 = "contact@canadatechintelligence.ca" # bounce/c
 ses_create_dmarc_record         = true                                # no _dmarc record existed (verified)
 ses_create_amplify_compute_role = true                                # attach to Amplify app in console
 
-# --- LinkedIn OIDC ------------------------------------------
+# --- LinkedIn OIDC — Production ----------------------------
 
-enable_linkedin_login = false
+enable_linkedin_login = true
