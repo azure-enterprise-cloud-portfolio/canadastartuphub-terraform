@@ -18,3 +18,10 @@ output "admin_group_name" {
   description = "Cognito administrator group"
   value       = aws_cognito_user_group.admin.name
 }
+
+
+output "linkedin_login_enabled" {
+  description = "Whether LinkedIn OIDC login is enabled"
+  value       = var.enable_linkedin_login
+}
+
