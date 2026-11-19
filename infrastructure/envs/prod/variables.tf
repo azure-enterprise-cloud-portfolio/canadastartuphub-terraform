@@ -137,3 +137,57 @@ variable "google_client_secret" {
     error_message = "PROD Google OAuth Client Secret must not be empty."
   }
 }
+
+# ------------------------------------------------------------
+# 5. LinkedIn OpenID Connect Authentication - Production
+# ------------------------------------------------------------
+#
+# LinkedIn application: CTI - Production
+#
+# Authentication uses the shared Cognito module.
+#
+# Credentials must come from GitHub Environment: prod.
+#
+# Do not store credentials in terraform.tfvars.
+# ------------------------------------------------------------
+
+variable "enable_linkedin_login" {
+  description = "Enable LinkedIn OpenID Connect authentication for CTI production."
+  type        = bool
+  default     = false
+}
+
+variable "linkedin_client_id" {
+  description = "LinkedIn Production OAuth Client ID."
+  type        = string
+  sensitive   = true
+  nullable    = true
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_linkedin_login ||
+      try(length(trimspace(var.linkedin_client_id)) > 0, false)
+    )
+
+    error_message = "LinkedIn Client ID is required when production LinkedIn login is enabled."
+  }
+}
+
+variable "linkedin_client_secret" {
+  description = "LinkedIn Production OAuth Client Secret."
+  type        = string
+  sensitive   = true
+  nullable    = true
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_linkedin_login ||
+      try(length(trimspace(var.linkedin_client_secret)) > 0, false)
+    )
+
+    error_message = "LinkedIn Client Secret is required when production LinkedIn login is enabled."
+  }
+}
+
