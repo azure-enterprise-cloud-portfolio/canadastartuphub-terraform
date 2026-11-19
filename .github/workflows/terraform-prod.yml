@@ -43,7 +43,6 @@ jobs:
     name: Terraform Plan (PROD)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: prod
 
     # Google OAuth credentials for the prod plan (repository secrets)
     env:
