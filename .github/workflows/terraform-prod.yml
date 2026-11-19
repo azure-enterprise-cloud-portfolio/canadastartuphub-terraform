@@ -65,6 +65,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Verify Google OAuth Credentials
+        shell: bash
+        run: |
+          if [[ -z "${TF_VAR_google_client_id//[[:space:]]/}" ]]; then
+            echo "::error::GOOGLE_CLIENT_ID_PROD is missing."
+            exit 1
+          fi
+
+          if [[ -z "${TF_VAR_google_client_secret//[[:space:]]/}" ]]; then
+            echo "::error::GOOGLE_CLIENT_SECRET_PROD is missing."
+            exit 1
+          fi
+
+          echo "Production Google OAuth credentials are present."  
+
       - name: Check Backend Configuration
         run: |
           test -f backend.tf
