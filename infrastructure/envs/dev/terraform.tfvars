@@ -18,4 +18,4 @@ ses_test_recipients = ["contact@canadatechintelligence.ca"]
 
 # --- LinkedIn OIDC ------------------------------------------
 
-enable_linkedin_login = false
+enable_linkedin_login = true

@@ -1,13 +1,25 @@
+
+# ============================================================
 # Canada Tech Intelligence — DEV Terraform Deployment
+# ============================================================
 #
-# Trigger: Approved PR merged into develop.
+# Trigger: Changes merged into develop
 # Environment: dev
 # AWS Account: 959856141465
 # Region: ca-central-1
 #
-# Terraform Plan -> Check -> Apply
+# Workflow:
+# Checkout -> Verify credentials -> Configure AWS
+# -> Terraform Format -> Init -> Validate -> Plan
+# -> Review -> Apply
+#
 # Destructive changes are blocked.
-# GitHub OIDC authentication.
+# AWS authentication uses GitHub OIDC.
+#
+# LinkedIn is controlled by:
+# infrastructure/envs/dev/terraform.tfvars
+# enable_linkedin_login = false / true
+# ============================================================
 
 name: Terraform DEV
 
@@ -41,10 +53,17 @@ jobs:
     timeout-minutes: 20
     environment: dev
 
-    # Google OAuth credentials for Terraform (from the dev environment secrets)
+    # --------------------------------------------------------
+    # OAuth credentials from GitHub Environment: dev
+    # --------------------------------------------------------
     env:
+      # Google OAuth — existing
       TF_VAR_google_client_id: ${{ secrets.GOOGLE_CLIENT_ID }}
       TF_VAR_google_client_secret: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+
+      # LinkedIn OIDC — new
+      TF_VAR_linkedin_client_id: ${{ secrets.LINKEDIN_CLIENT_ID }}
+      TF_VAR_linkedin_client_secret: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
 
     permissions:
       contents: read
@@ -55,9 +74,15 @@ jobs:
         working-directory: infrastructure/envs/dev
 
     steps:
+      # ------------------------------------------------------
+      # 1. Checkout
+      # ------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v5
-      
+
+      # ------------------------------------------------------
+      # 2. Verify Google OAuth credentials
+      # ------------------------------------------------------
       - name: Verify Google OAuth Credentials
         shell: bash
         run: |
@@ -73,17 +98,48 @@ jobs:
 
           echo "Google OAuth credentials are configured."
 
+      # ------------------------------------------------------
+      # 3. Verify LinkedIn credentials when enabled
+      # ------------------------------------------------------
+      - name: Verify LinkedIn OIDC Credentials
+        shell: bash
+        run: |
+          if grep -Eq '^[[:space:]]*enable_linkedin_login[[:space:]]*=[[:space:]]*true([[:space:]]*(#.*)?)?$' terraform.tfvars; then
+            if [[ -z "${TF_VAR_linkedin_client_id//[[:space:]]/}" ]]; then
+              echo "::error::LINKEDIN_CLIENT_ID is missing or empty."
+              exit 1
+            fi
+
+            if [[ -z "${TF_VAR_linkedin_client_secret//[[:space:]]/}" ]]; then
+              echo "::error::LINKEDIN_CLIENT_SECRET is missing or empty."
+              exit 1
+            fi
+
+            echo "LinkedIn OIDC credentials are configured."
+          else
+            echo "LinkedIn login is disabled in terraform.tfvars."
+          fi
+
+      # ------------------------------------------------------
+      # 4. Setup Terraform
+      # ------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      # ------------------------------------------------------
+      # 5. Verify Terraform root
+      # ------------------------------------------------------
       - name: Check Terraform Root
         run: |
           test -f backend.tf
           ls *.tf > /dev/null
 
+      # ------------------------------------------------------
+      # 6. AWS credentials via GitHub OIDC
+      # ------------------------------------------------------
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -91,25 +147,45 @@ jobs:
           role-session-name: cti-dev-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # ------------------------------------------------------
+      # 7. Verify AWS account
+      # ------------------------------------------------------
       - name: Verify AWS Account
+        shell: bash
         run: |
           ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+
           if [ "$ACCOUNT" != "$AWS_ACCOUNT_ID" ]; then
             echo "::error::Incorrect AWS account."
             exit 1
           fi
 
+          echo "Verified DEV AWS account."
+
+      # ------------------------------------------------------
+      # 8. Terraform Format
+      # ------------------------------------------------------
       - name: Terraform Format
         run: terraform fmt -check -recursive
 
+      # ------------------------------------------------------
+      # 9. Terraform Init
+      # ------------------------------------------------------
       - name: Terraform Init
         run: terraform init -lockfile=readonly -input=false
 
+      # ------------------------------------------------------
+      # 10. Terraform Validate
+      # ------------------------------------------------------
       - name: Terraform Validate
         run: terraform validate -no-color
 
+      # ------------------------------------------------------
+      # 11. Terraform Plan
+      # ------------------------------------------------------
       - name: Terraform Plan
         id: plan
+        shell: bash
         run: |
           set +e
 
@@ -124,14 +200,20 @@ jobs:
 
           if [ "$code" -eq 0 ]; then
             echo "changes=false" >> "$GITHUB_OUTPUT"
+
           elif [ "$code" -eq 2 ]; then
             echo "changes=true" >> "$GITHUB_OUTPUT"
+
           else
             echo "::error::Terraform plan failed."
             exit 1
           fi
 
+      # ------------------------------------------------------
+      # 12. Review plan and block destruction
+      # ------------------------------------------------------
       - name: Review Plan and Block Destruction
+        shell: bash
         run: |
           terraform show -json tfplan | jq -r '
             [.resource_changes[]?
@@ -169,12 +251,19 @@ jobs:
             exit 1
           }
 
+      # ------------------------------------------------------
+      # 13. Terraform Apply
+      # ------------------------------------------------------
       - name: Terraform Apply
         if: steps.plan.outputs.changes == 'true'
         run: terraform apply -no-color -input=false tfplan
 
+      # ------------------------------------------------------
+      # 14. Deployment Summary
+      # ------------------------------------------------------
       - name: Deployment Summary
         if: success()
+        shell: bash
         run: |
           {
             echo "## CTI DEV Deployment"
@@ -182,5 +271,6 @@ jobs:
             echo "AWS Account: $AWS_ACCOUNT_ID"
             echo "Result: Successful"
           } >> "$GITHUB_STEP_SUMMARY"
+
 
 
