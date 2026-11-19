@@ -1,4 +1,9 @@
 
+# ============================================================
+# Canada Tech Intelligence
+# Production Cognito Authentication
+# ============================================================
+
 module "cognito" {
   source = "../../modules/cognito"
 
@@ -10,13 +15,13 @@ module "cognito" {
   google_client_id     = var.google_client_id
   google_client_secret = var.google_client_secret
 
-  # OAuth callback URL
+  # Production OAuth callback URL
   oauth_callback_urls = [
-    "https://dev.canadatechintelligence.ca/auth/callback"
+    "https://canadatechintelligence.ca/auth/callback"
   ]
 
-  # Logout redirect URL
+  # Production logout redirect URL
   oauth_logout_urls = [
-    "https://dev.canadatechintelligence.ca/login"
+    "https://canadatechintelligence.ca/login"
   ]
 }

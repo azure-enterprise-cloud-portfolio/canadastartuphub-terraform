@@ -1,3 +1,13 @@
+
+# ============================================================
+# Canada Tech Intelligence
+# Production Environment - Terraform Variables
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. AWS Configuration
+# ------------------------------------------------------------
+
 variable "aws_region" {
   description = "AWS region for this environment."
   type        = string
@@ -10,7 +20,13 @@ variable "project" {
   default     = "canadatechintelligence-platform"
 
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$", var.project))
+    condition = can(
+      regex(
+        "^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$",
+        var.project
+      )
+    )
+
     error_message = "project must be lowercase letters, numbers and hyphens (3-40 chars), no spaces."
   }
 }
@@ -32,10 +48,14 @@ variable "domain" {
   default     = "canadatechintelligence.ca"
 }
 
-# --- Dev subdomain delegation ----------------------------------------------------
+# ------------------------------------------------------------
+# 2. Route 53 - DEV Subdomain Delegation
+# ------------------------------------------------------------
+
 variable "dev_zone_name_servers" {
   description = "Name servers of dev.canadatechintelligence.ca in the dev account."
   type        = list(string)
+
   default = [
     "ns-1665.awsdns-16.co.uk",
     "ns-497.awsdns-62.com",
@@ -46,13 +66,20 @@ variable "dev_zone_name_servers" {
   validation {
     condition = length(var.dev_zone_name_servers) == 4 && alltrue([
       for ns in var.dev_zone_name_servers :
-      can(regex("^ns-[0-9]+\\.awsdns-[0-9]+\\.(com|net|org|co\\.uk)$", ns))
+      can(regex(
+        "^ns-[0-9]+\\.awsdns-[0-9]+\\.(com|net|org|co\\.uk)$",
+        ns
+      ))
     ])
+
     error_message = "dev_zone_name_servers must be the 4 real Route 53 name servers of the dev zone (no placeholders, no trailing dot)."
   }
 }
 
-# --- SES -----------------------------------------------------------------------
+# ------------------------------------------------------------
+# 3. Amazon SES
+# ------------------------------------------------------------
+
 variable "ses_from_address" {
   description = "The only From address the prod application may send as."
   type        = string
@@ -83,25 +110,30 @@ variable "ses_create_amplify_compute_role" {
   default     = true
 }
 
+# ------------------------------------------------------------
+# 4. Google OAuth Authentication - Production
+# ------------------------------------------------------------
 
-# --- Amazon Cognito ------------------------------------------------------------
+variable "google_client_id" {
+  description = "Google OAuth Client ID for CTI production."
+  type        = string
+  sensitive   = true
+  nullable    = false
 
-output "cognito_user_pool_id" {
-  description = "CTI development Cognito User Pool ID"
-  value       = module.cognito.user_pool_id
+  validation {
+    condition     = length(trimspace(var.google_client_id)) > 0
+    error_message = "PROD Google OAuth Client ID must not be empty."
+  }
 }
 
-output "cognito_user_pool_client_id" {
-  description = "CTI development web client ID"
-  value       = module.cognito.user_pool_client_id
-}
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret for CTI production."
+  type        = string
+  sensitive   = true
+  nullable    = false
 
-output "cognito_user_pool_arn" {
-  description = "CTI development User Pool ARN"
-  value       = module.cognito.user_pool_arn
-}
-
-output "cognito_admin_group_name" {
-  description = "CTI Cognito administrator group"
-  value       = module.cognito.admin_group_name
+  validation {
+    condition     = length(trimspace(var.google_client_secret)) > 0
+    error_message = "PROD Google OAuth Client Secret must not be empty."
+  }
 }

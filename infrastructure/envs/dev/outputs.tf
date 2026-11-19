@@ -40,21 +40,22 @@ output "ses_app_environment_variables" {
 }
 
 # ------------------------------------------------------------
-# 3. Amazon Cognito - Development Authentication
+# 3. Amazon Cognito - Authentication
+# Same output names as PROD
 # ------------------------------------------------------------
 
 output "cognito_user_pool_id" {
-  description = "CTI development Cognito User Pool ID"
+  description = "CTI Cognito User Pool ID"
   value       = module.cognito.user_pool_id
 }
 
 output "cognito_user_pool_client_id" {
-  description = "CTI development Cognito web application client ID"
+  description = "CTI Cognito web application client ID"
   value       = module.cognito.user_pool_client_id
 }
 
 output "cognito_user_pool_arn" {
-  description = "CTI development Cognito User Pool ARN"
+  description = "CTI Cognito User Pool ARN"
   value       = module.cognito.user_pool_arn
 }
 
