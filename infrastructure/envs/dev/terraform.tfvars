@@ -14,3 +14,8 @@ ses_create_amplify_compute_role = true                                    # role
 
 # --- SES sandbox: verified recipients (ses.tf) ---------------------------------
 ses_test_recipients = ["contact@canadatechintelligence.ca"]
+
+
+# --- LinkedIn OIDC ------------------------------------------
+
+enable_linkedin_login = true

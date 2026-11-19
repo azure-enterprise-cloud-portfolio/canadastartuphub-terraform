@@ -13,10 +13,27 @@ module "cognito" {
   # ----------------------------------------------------------
   # Google OAuth Authentication
   # ----------------------------------------------------------
+  #
+  # Preserve existing production Google Sign-In.
+  # ----------------------------------------------------------
 
   enable_google_login  = true
   google_client_id     = var.google_client_id
   google_client_secret = var.google_client_secret
+
+  # ----------------------------------------------------------
+  # LinkedIn OpenID Connect Authentication
+  # ----------------------------------------------------------
+  #
+  # Production LinkedIn application: CTI - Production
+  # Credentials are supplied using GitHub Actions secrets.
+  #
+  # Do not place credentials in Terraform source files.
+  # ----------------------------------------------------------
+
+  enable_linkedin_login  = var.enable_linkedin_login
+  linkedin_client_id     = var.linkedin_client_id
+  linkedin_client_secret = var.linkedin_client_secret
 
   # ----------------------------------------------------------
   # Production OAuth Callback URL

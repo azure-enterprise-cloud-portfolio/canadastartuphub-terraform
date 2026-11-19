@@ -11,6 +11,7 @@
 # - Cognito User Pools
 # - Cognito App Clients
 # - Google OAuth credentials
+# - LinkedIn OAuth credentials
 # - Callback and logout URLs
 #
 # DEV Website:
@@ -45,19 +46,31 @@ module "cognito" {
   google_client_secret = var.google_client_secret
 
   # ----------------------------------------------------------
-  # 3. DEV OAuth Callback URLs
+  # 3. LinkedIn OpenID Connect Authentication
+  # ----------------------------------------------------------
+
+  # Disabled until the LinkedIn Developer App is ready.
+  enable_linkedin_login = var.enable_linkedin_login
+
+  # Credentials must be provided through secure variables.
+  # Never hardcode LinkedIn credentials here.
+  linkedin_client_id     = var.linkedin_client_id
+  linkedin_client_secret = var.linkedin_client_secret
+
+  # ----------------------------------------------------------
+  # 4. DEV OAuth Callback URLs
   # ----------------------------------------------------------
   #
   # Cognito requires an exact redirect_uri match.
   #
-  # Production DEV website:
+  # DEV website:
   # https://dev.canadatechintelligence.ca
   #
   # Local development:
   # http://localhost:3000
   #
-  # These URLs must also be supported by the application's
-  # OAuth callback implementation.
+  # These URLs must be supported by the application OAuth
+  # callback implementation.
   # ----------------------------------------------------------
 
   oauth_callback_urls = [
@@ -66,13 +79,11 @@ module "cognito" {
   ]
 
   # ----------------------------------------------------------
-  # 4. DEV OAuth Logout URLs
+  # 5. DEV OAuth Logout URLs
   # ----------------------------------------------------------
   #
-  # After federated logout, Cognito redirects the user
-  # to one of the registered logout URLs.
-  #
-  # Logout URLs must match the requested logout_uri.
+  # Cognito redirects to an approved logout URL after
+  # federated logout.
   # ----------------------------------------------------------
 
   oauth_logout_urls = [

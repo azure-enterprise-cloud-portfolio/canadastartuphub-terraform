@@ -1,13 +1,32 @@
+
+# ============================================================
 # Canada Tech Intelligence — DEV Terraform Deployment
+# ============================================================
 #
-# Trigger: Approved PR merged into develop.
+# Trigger: Changes pushed to develop
 # Environment: dev
 # AWS Account: 959856141465
 # Region: ca-central-1
 #
-# Terraform Plan -> Check -> Apply
-# Destructive changes are blocked.
-# GitHub OIDC authentication.
+# Workflow:
+# Checkout -> Verify Credentials -> Configure AWS
+# -> Terraform Format -> Init -> Validate -> Plan
+# -> Review -> Optional Apply
+#
+# Security:
+# - AWS authentication uses GitHub OIDC.
+# - Destructive changes are blocked.
+# - OAuth secrets come from GitHub Environment: dev.
+# - Terraform apply requires explicit authorization.
+#
+# LinkedIn activation:
+# infrastructure/envs/dev/terraform.tfvars
+# enable_linkedin_login = false / true
+#
+# Terraform apply authorization:
+# GitHub Environment variable ALLOW_TERRAFORM_APPLY
+# Default/absent: no apply
+# ============================================================
 
 name: Terraform DEV
 
@@ -18,6 +37,8 @@ on:
       - 'infrastructure/envs/dev/**'
       - 'infrastructure/modules/**'
       - '.github/workflows/terraform-dev.yml'
+
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,16 +56,23 @@ env:
 
 jobs:
   deploy:
-    name: Terraform Apply (DEV)
+    name: Terraform DEV Plan / Apply
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: dev
 
-    # Google OAuth credentials for Terraform (from the dev environment secrets)
+    # --------------------------------------------------------
+    # OAuth credentials from GitHub Environment: dev
+    # --------------------------------------------------------
     env:
+      # Existing Google OAuth
       TF_VAR_google_client_id: ${{ secrets.GOOGLE_CLIENT_ID }}
       TF_VAR_google_client_secret: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+
+      # LinkedIn OIDC — DEV environment
+      TF_VAR_linkedin_client_id: ${{ secrets.DEV_LINKEDIN_CLIENT_ID }}
+      TF_VAR_linkedin_client_secret: ${{ secrets.DEV_LINKEDIN_CLIENT_SECRET }}
 
     permissions:
       contents: read
@@ -55,9 +83,15 @@ jobs:
         working-directory: infrastructure/envs/dev
 
     steps:
+      # ------------------------------------------------------
+      # 1. Checkout
+      # ------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v5
-      
+
+      # ------------------------------------------------------
+      # 2. Verify Google OAuth credentials
+      # ------------------------------------------------------
       - name: Verify Google OAuth Credentials
         shell: bash
         run: |
@@ -73,17 +107,51 @@ jobs:
 
           echo "Google OAuth credentials are configured."
 
+      # ------------------------------------------------------
+      # 3. Verify LinkedIn credentials when enabled
+      # ------------------------------------------------------
+      - name: Verify LinkedIn OIDC Credentials
+        shell: bash
+        run: |
+          if grep -Eq '^[[:space:]]*enable_linkedin_login[[:space:]]*=[[:space:]]*true([[:space:]]*(#.*)?)?$' terraform.tfvars; then
+
+            if [[ -z "${TF_VAR_linkedin_client_id//[[:space:]]/}" ]]; then
+              echo "::error::LINKEDIN_CLIENT_ID is missing or empty."
+              exit 1
+            fi
+
+            if [[ -z "${TF_VAR_linkedin_client_secret//[[:space:]]/}" ]]; then
+              echo "::error::LINKEDIN_CLIENT_SECRET is missing or empty."
+              exit 1
+            fi
+
+            echo "LinkedIn OIDC credentials are configured."
+
+          else
+            echo "LinkedIn OIDC is disabled in terraform.tfvars."
+          fi
+
+      # ------------------------------------------------------
+      # 4. Setup Terraform
+      # ------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      # ------------------------------------------------------
+      # 5. Check Terraform root
+      # ------------------------------------------------------
       - name: Check Terraform Root
+        shell: bash
         run: |
           test -f backend.tf
           ls *.tf > /dev/null
 
+      # ------------------------------------------------------
+      # 6. Configure AWS credentials using GitHub OIDC
+      # ------------------------------------------------------
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -91,25 +159,47 @@ jobs:
           role-session-name: cti-dev-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # ------------------------------------------------------
+      # 7. Verify AWS account
+      # ------------------------------------------------------
       - name: Verify AWS Account
+        shell: bash
         run: |
-          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-          if [ "$ACCOUNT" != "$AWS_ACCOUNT_ID" ]; then
+          ACCOUNT=$(aws sts get-caller-identity \
+            --query Account \
+            --output text)
+
+          if [[ "$ACCOUNT" != "$AWS_ACCOUNT_ID" ]]; then
             echo "::error::Incorrect AWS account."
             exit 1
           fi
 
+          echo "Verified DEV AWS account."
+
+      # ------------------------------------------------------
+      # 8. Terraform format
+      # ------------------------------------------------------
       - name: Terraform Format
         run: terraform fmt -check -recursive
 
+      # ------------------------------------------------------
+      # 9. Terraform init
+      # ------------------------------------------------------
       - name: Terraform Init
         run: terraform init -lockfile=readonly -input=false
 
+      # ------------------------------------------------------
+      # 10. Terraform validate
+      # ------------------------------------------------------
       - name: Terraform Validate
         run: terraform validate -no-color
 
+      # ------------------------------------------------------
+      # 11. Terraform plan
+      # ------------------------------------------------------
       - name: Terraform Plan
         id: plan
+        shell: bash
         run: |
           set +e
 
@@ -122,16 +212,23 @@ jobs:
           code=$?
           set -e
 
-          if [ "$code" -eq 0 ]; then
+          if [[ "$code" -eq 0 ]]; then
             echo "changes=false" >> "$GITHUB_OUTPUT"
-          elif [ "$code" -eq 2 ]; then
+
+          elif [[ "$code" -eq 2 ]]; then
             echo "changes=true" >> "$GITHUB_OUTPUT"
+
           else
             echo "::error::Terraform plan failed."
             exit 1
           fi
 
+      # ------------------------------------------------------
+      # 12. Review plan and block destructive changes
+      # ------------------------------------------------------
       - name: Review Plan and Block Destruction
+        id: review
+        shell: bash
         run: |
           terraform show -json tfplan | jq -r '
             [.resource_changes[]?
@@ -169,18 +266,52 @@ jobs:
             exit 1
           }
 
+          echo "Terraform plan passed destruction checks."
+
+
+      # ------------------------------------------------------
+      # 13. Terraform Apply — automatic DEV deployment
+      # ------------------------------------------------------
       - name: Terraform Apply
-        if: steps.plan.outputs.changes == 'true'
+        id: apply
+        if: >-
+          steps.plan.outputs.changes == 'true' &&
+          steps.review.outcome == 'success'
+        shell: bash
         run: terraform apply -no-color -input=false tfplan
 
+
+      # ------------------------------------------------------
+      # 14. Deployment summary
+      # ------------------------------------------------------
       - name: Deployment Summary
         if: success()
+        shell: bash
+        env:
+          PLAN_HAS_CHANGES: ${{ steps.plan.outputs.changes }}
+          APPLY_OUTCOME: ${{ steps.apply.outcome }}
         run: |
           {
-            echo "## CTI DEV Deployment"
+            echo "## CTI DEV Terraform"
+            echo ""
             echo "Environment: dev"
+            echo ""
             echo "AWS Account: $AWS_ACCOUNT_ID"
-            echo "Result: Successful"
+            echo ""
+
+            if [[ "$APPLY_OUTCOME" == "success" ]]; then
+              echo "Result: Terraform applied successfully."
+
+            elif [[ "$PLAN_HAS_CHANGES" == "true" ]]; then
+              echo "Result: Plan completed; apply not authorized."
+              echo ""
+              echo "No infrastructure changes applied."
+
+            else
+              echo "Result: No infrastructure changes required."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+
 
 
