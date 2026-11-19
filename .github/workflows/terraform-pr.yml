@@ -1,17 +1,35 @@
 
-# CTI Terraform PR Validation and Plan
+# ============================================================
+# Canada Tech Intelligence
+# Terraform Pull Request Validation and Plan
+# ============================================================
 #
-# PR to develop -> Dev AWS account
-# PR to main    -> Prod AWS account
+# PR to develop -> DEV AWS account
+# PR to main    -> PROD AWS account
 #
-# No terraform apply.
+# Terraform Format -> Validate -> Plan -> Summary
+#
+# No Terraform Apply.
 # Plans are for review only.
+#
+# SECURITY:
+# - No AWS credentials for forked PRs
+# - PR Plan uses protected GitHub environment pr-plan
+# - Google OAuth credentials supplied by environment secrets
+# - Separate AWS IAM Plan roles for DEV and PROD
+# - AWS account verified before Terraform operations
+# - Secrets are never printed
+# - No Terraform plan artifact is uploaded
+#
+# ============================================================
 
 name: Terraform PR
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches:
+      - develop
+      - main
     paths:
       - 'infrastructure/**'
       - 'bootstrap/**'
@@ -31,10 +49,18 @@ env:
   AWS_REGION: ca-central-1
 
 jobs:
+
+  # ----------------------------------------------------------
+  # 1. Terraform Format and Validation
+  # ----------------------------------------------------------
+
   validate:
     name: Terraform Format and Validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -52,16 +78,21 @@ jobs:
       - name: Terraform Validate
         run: bash infrastructure/scripts/validate.sh
 
+  # ----------------------------------------------------------
+  # 2. Terraform Plan - Review Only
+  # ----------------------------------------------------------
+
   plan:
     name: Terraform Plan
     needs: validate
 
-    # Do not grant AWS credentials to forked pull requests.
+    # Forked PRs must not receive AWS or Google credentials.
     if: github.event.pull_request.head.repo.full_name == github.repository
 
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Protected planning environment.
     environment: pr-plan
 
     permissions:
@@ -69,16 +100,39 @@ jobs:
       id-token: write
 
     env:
+      # Select Terraform root.
       TF_ROOT: ${{ github.base_ref == 'main' && 'infrastructure/envs/prod' || 'infrastructure/envs/dev' }}
+
+      # Expected AWS account.
       EXPECTED_ACCOUNT: ${{ github.base_ref == 'main' && '285034436054' || '959856141465' }}
+
+      # ------------------------------------------------------
+      # Google OAuth Credentials
+      # ------------------------------------------------------
+      # Secrets must exist in protected environment pr-plan.
+      # DEV PRs use DEV credentials.
+      # PROD PRs use PROD credentials.
+
+      TF_VAR_google_client_id: ${{ github.base_ref == 'main' && secrets.GOOGLE_CLIENT_ID_PROD || secrets.GOOGLE_CLIENT_ID }}
+
+      TF_VAR_google_client_secret: ${{ github.base_ref == 'main' && secrets.GOOGLE_CLIENT_SECRET_PROD || secrets.GOOGLE_CLIENT_SECRET }}
 
     defaults:
       run:
         shell: bash
 
     steps:
+
+      # ------------------------------------------------------
+      # Checkout
+      # ------------------------------------------------------
+
       - name: Checkout
         uses: actions/checkout@v5
+
+      # ------------------------------------------------------
+      # Setup Terraform
+      # ------------------------------------------------------
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -86,33 +140,93 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      # ------------------------------------------------------
+      # Verify Terraform Root
+      # ------------------------------------------------------
+
       - name: Verify Terraform Root
         run: |
+          set -euo pipefail
+
           if [ ! -f "$TF_ROOT/backend.tf" ]; then
             echo "::error::Missing Terraform root: $TF_ROOT"
             exit 1
           fi
 
+          echo "Terraform root verified."
+
+      # ------------------------------------------------------
+      # Verify Google OAuth Credentials
+      # ------------------------------------------------------
+
+      - name: Verify Google OAuth Credentials
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TF_VAR_google_client_id//[[:space:]]/}" ]]; then
+            echo "::error::Google OAuth Client ID is missing."
+            exit 1
+          fi
+
+          if [[ -z "${TF_VAR_google_client_secret//[[:space:]]/}" ]]; then
+            echo "::error::Google OAuth Client Secret is missing."
+            exit 1
+          fi
+
+          echo "Google OAuth credentials are present."
+
+      # ------------------------------------------------------
+      # Configure AWS OIDC Plan Credentials
+      # ------------------------------------------------------
+
       - name: Configure AWS Plan Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ github.base_ref == 'main' && vars.AWS_PLAN_ROLE_ARN_PROD || vars.AWS_PLAN_ROLE_ARN_DEV }}
+          role-session-name: cti-pr-plan-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
-          allowed-account-ids: ${{ env.EXPECTED_ACCOUNT }}
+
+      # ------------------------------------------------------
+      # Verify AWS Account
+      # ------------------------------------------------------
 
       - name: Verify AWS Account
         run: |
+          set -euo pipefail
+
           ACCOUNT=$(aws sts get-caller-identity \
-            --query Account --output text)
+            --query Account \
+            --output text)
 
           if [ "$ACCOUNT" != "$EXPECTED_ACCOUNT" ]; then
-            echo "::error::Incorrect AWS account"
+            echo "::error::Incorrect AWS account."
             exit 1
           fi
 
+          echo "AWS account verified."
+
+      # ------------------------------------------------------
+      # Terraform Init
+      # ------------------------------------------------------
+
       - name: Terraform Init
         working-directory: ${{ env.TF_ROOT }}
-        run: terraform init -input=false -lockfile=readonly
+        run: |
+          terraform init \
+            -input=false \
+            -lockfile=readonly
+
+      # ------------------------------------------------------
+      # Terraform Validate
+      # ------------------------------------------------------
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_ROOT }}
+        run: terraform validate -no-color
+
+      # ------------------------------------------------------
+      # Terraform Plan
+      # ------------------------------------------------------
 
       - name: Terraform Plan
         id: plan
@@ -130,24 +244,34 @@ jobs:
           code=$?
           set -e
 
-          if [ "$code" -eq 1 ]; then
-            exit 1
+          if [ "$code" -eq 0 ]; then
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+            echo "No Terraform changes."
+
           elif [ "$code" -eq 2 ]; then
             echo "changes=true" >> "$GITHUB_OUTPUT"
-          elif [ "$code" -eq 0 ]; then
-            echo "changes=false" >> "$GITHUB_OUTPUT"
+            echo "Terraform changes detected."
+
           else
-            exit "$code"
+            echo "::error::Terraform Plan failed."
+            exit 1
           fi
+
+      # ------------------------------------------------------
+      # Terraform Plan Summary
+      # ------------------------------------------------------
 
       - name: Terraform Plan Summary
         working-directory: ${{ env.TF_ROOT }}
         run: |
+          set -euo pipefail
+
           {
             echo "## CTI Terraform PR Plan"
             echo ""
             echo "Target: ${{ github.base_ref }}"
             echo "AWS Account: $EXPECTED_ACCOUNT"
+            echo "Region: $AWS_REGION"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -163,11 +287,13 @@ jobs:
             "### Planned resource changes",
             "",
             "Create: \(
-              [$changes[] | select(.actions == ["create"])]
+              [$changes[]
+                | select(.actions == ["create"])]
               | length
             )",
             "Update: \(
-              [$changes[] | select(.actions == ["update"])]
+              [$changes[]
+                | select(.actions == ["update"])]
               | length
             )",
             "Delete or replace: \(
@@ -190,7 +316,48 @@ jobs:
             )
           ' >> "$GITHUB_STEP_SUMMARY"
 
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Review only — no apply performed." \
-            >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo ""
+            echo "Review only - no Terraform Apply performed."
+          } >> "$GITHUB_STEP_SUMMARY"
 
+      # ------------------------------------------------------
+      # Block Destructive Plans
+      # ------------------------------------------------------
+
+      - name: Block Destructive Changes
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
+          set -euo pipefail
+
+          if ! terraform show -json tfplan | jq -e '
+            [
+              .resource_changes[]?
+              | select(
+                  (.change.actions | index("delete")) != null
+                )
+            ] | length == 0
+          ' > /dev/null; then
+
+            echo "::error::Terraform plan contains destructive changes."
+            exit 1
+          fi
+
+          echo "No resource deletion or replacement detected."
+
+      # ------------------------------------------------------
+      # Final Summary
+      # ------------------------------------------------------
+
+      - name: Final PR Summary
+        if: success()
+        run: |
+          {
+            echo ""
+            echo "Terraform validation: PASSED"
+            echo "Terraform plan: PASSED"
+            echo "AWS account: VERIFIED"
+            echo "Destructive changes: NONE"
+            echo ""
+            echo "No infrastructure changes were applied."
+          } >> "$GITHUB_STEP_SUMMARY"
