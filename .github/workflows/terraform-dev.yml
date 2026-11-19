@@ -268,16 +268,18 @@ jobs:
 
           echo "Terraform plan passed destruction checks."
 
+
       # ------------------------------------------------------
-      # 13. Terraform apply — explicit authorization required
+      # 13. Terraform Apply — automatic DEV deployment
       # ------------------------------------------------------
       - name: Terraform Apply
         id: apply
         if: >-
           steps.plan.outputs.changes == 'true' &&
-          vars.ALLOW_TERRAFORM_APPLY == 'true'
+          steps.review.outcome == 'success'
         shell: bash
         run: terraform apply -no-color -input=false tfplan
+
 
       # ------------------------------------------------------
       # 14. Deployment summary
