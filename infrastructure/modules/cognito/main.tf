@@ -90,8 +90,11 @@ resource "aws_cognito_user_pool" "this" {
 # 2. Google Identity Provider
 # ------------------------------------------------------------
 #
-# Preserve the existing working Google configuration.
-# Do not change Google provider details as part of LinkedIn.
+# Preserve the existing Google provider settings observed
+# in DEV Cognito and the Terraform plan.
+#
+# Do not change working Google authentication when adding
+# LinkedIn OIDC.
 # ------------------------------------------------------------
 
 resource "aws_cognito_identity_provider" "google" {
@@ -105,11 +108,26 @@ resource "aws_cognito_identity_provider" "google" {
     client_id        = var.google_client_id
     client_secret    = var.google_client_secret
     authorize_scopes = "openid email profile"
+
+    # Existing Cognito Google provider endpoint settings.
+    attributes_url = "https://people.googleapis.com/v1/people/me?personFields="
+
+    attributes_url_add_attributes = "true"
+
+    authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
+
+    oidc_issuer = "https://accounts.google.com"
+
+    token_request_method = "POST"
+
+    token_url = "https://www.googleapis.com/oauth2/v4/token"
   }
 
+  # Preserve existing Google attribute mappings.
   attribute_mapping = {
     email          = "email"
     email_verified = "email_verified"
+    username       = "sub"
   }
 }
 
@@ -235,5 +253,6 @@ resource "aws_cognito_user_pool_domain" "this" {
   domain       = "cti-${var.environment}-auth"
   user_pool_id = aws_cognito_user_pool.this.id
 }
+
 
 
