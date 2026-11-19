@@ -72,7 +72,6 @@ variable "ses_create_amplify_compute_role" {
   default     = false
 }
 
-
 # --- Google OAuth --------------------------------------------
 
 variable "google_client_id" {
@@ -98,3 +97,52 @@ variable "google_client_secret" {
     error_message = "DEV Google OAuth Client Secret must not be empty."
   }
 }
+
+# --- LinkedIn OAuth / OIDC ----------------------------------
+
+variable "enable_linkedin_login" {
+  description = "Enable LinkedIn OIDC sign-in for CTI development."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "linkedin_client_id" {
+  description = "LinkedIn OpenID Connect Client ID for CTI development."
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_linkedin_login ||
+      (
+        var.linkedin_client_id != null &&
+        try(length(trimspace(var.linkedin_client_id)) > 0, false)
+      )
+    )
+
+    error_message = "DEV LinkedIn Client ID is required when LinkedIn login is enabled."
+  }
+}
+
+variable "linkedin_client_secret" {
+  description = "LinkedIn OpenID Connect Client Secret for CTI development."
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_linkedin_login ||
+      (
+        var.linkedin_client_secret != null &&
+        try(length(trimspace(var.linkedin_client_secret)) > 0, false)
+      )
+    )
+
+    error_message = "DEV LinkedIn Client Secret is required when LinkedIn login is enabled."
+  }
+}
+
+

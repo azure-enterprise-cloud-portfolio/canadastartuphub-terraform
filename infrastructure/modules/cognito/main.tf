@@ -5,6 +5,31 @@
 # ============================================================
 
 # ------------------------------------------------------------
+# 0. Federated Authentication Configuration
+# ------------------------------------------------------------
+
+locals {
+  # OAuth is enabled when at least one external provider
+  # is enabled.
+  enable_federated_login = (
+    var.enable_google_login ||
+    var.enable_linkedin_login
+  )
+
+  # Keep native Cognito authentication available.
+  # Reference each IdP so Terraform respects dependencies.
+  enabled_identity_providers = concat(
+    ["COGNITO"],
+    var.enable_google_login ? [
+      aws_cognito_identity_provider.google[0].provider_name
+    ] : [],
+    var.enable_linkedin_login ? [
+      aws_cognito_identity_provider.linkedin[0].provider_name
+    ] : []
+  )
+}
+
+# ------------------------------------------------------------
 # 1. Cognito User Pool
 # ------------------------------------------------------------
 
@@ -86,7 +111,48 @@ resource "aws_cognito_identity_provider" "google" {
 }
 
 # ------------------------------------------------------------
-# 3. Cognito Web Application Client
+# 3. LinkedIn OpenID Connect Identity Provider
+# ------------------------------------------------------------
+
+resource "aws_cognito_identity_provider" "linkedin" {
+  count = var.enable_linkedin_login ? 1 : 0
+
+  user_pool_id  = aws_cognito_user_pool.this.id
+  provider_name = "LinkedIn"
+  provider_type = "OIDC"
+
+  provider_details = {
+    client_id        = var.linkedin_client_id
+    client_secret    = var.linkedin_client_secret
+    authorize_scopes = "openid profile email"
+
+    # Must match LinkedIn's live OIDC discovery metadata.
+    oidc_issuer = "https://www.linkedin.com/oauth"
+
+    attributes_request_method = "GET"
+  }
+
+  # LinkedIn's email claim can be absent.
+  # The application must handle that case safely.
+  attribute_mapping = {
+    email = "email"
+    name  = "name"
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        length(trimspace(var.linkedin_client_id)) > 0 &&
+        length(trimspace(var.linkedin_client_secret)) > 0
+      )
+
+      error_message = "LinkedIn Client ID and Client Secret are required when LinkedIn login is enabled."
+    }
+  }
+}
+
+# ------------------------------------------------------------
+# 4. Cognito Web Application Client
 # ------------------------------------------------------------
 
 resource "aws_cognito_user_pool_client" "web" {
@@ -117,32 +183,34 @@ resource "aws_cognito_user_pool_client" "web" {
   prevent_user_existence_errors = "ENABLED"
 
   # ----------------------------------------------------------
-  # Google OAuth
+  # Native Cognito + Google + LinkedIn
   # ----------------------------------------------------------
 
-  supported_identity_providers = var.enable_google_login ? [
-    "COGNITO",
-    aws_cognito_identity_provider.google[0].provider_name
-  ] : ["COGNITO"]
+  supported_identity_providers = local.enabled_identity_providers
 
-  allowed_oauth_flows_user_pool_client = var.enable_google_login
+  # Enable hosted OAuth when Google or LinkedIn is enabled.
+  allowed_oauth_flows_user_pool_client = (
+    local.enable_federated_login
+  )
 
-  allowed_oauth_flows = var.enable_google_login ? [
+  # Authorization Code flow
+  allowed_oauth_flows = local.enable_federated_login ? [
     "code"
   ] : []
 
-  allowed_oauth_scopes = var.enable_google_login ? [
+  allowed_oauth_scopes = local.enable_federated_login ? [
     "openid",
     "email",
     "profile"
   ] : []
 
+  # Preserve existing application callback URLs.
   callback_urls = var.oauth_callback_urls
   logout_urls   = var.oauth_logout_urls
 }
 
 # ------------------------------------------------------------
-# 4. Administrator Group
+# 5. Administrator Group
 # ------------------------------------------------------------
 
 resource "aws_cognito_user_group" "admin" {
@@ -154,13 +222,12 @@ resource "aws_cognito_user_group" "admin" {
   precedence = 1
 }
 
-
 # ------------------------------------------------------------
-# Cognito Domain for Google OAuth
+# 6. Cognito Hosted Domain
 # ------------------------------------------------------------
 
 resource "aws_cognito_user_pool_domain" "this" {
-  count = var.enable_google_login ? 1 : 0
+  count = local.enable_federated_login ? 1 : 0
 
   domain       = "cti-${var.environment}-auth"
   user_pool_id = aws_cognito_user_pool.this.id
