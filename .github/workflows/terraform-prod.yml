@@ -44,6 +44,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Google OAuth credentials for the prod plan (repository secrets)
+    env:
+      TF_VAR_google_client_id: ${{ secrets.GOOGLE_CLIENT_ID_PROD }}
+      TF_VAR_google_client_secret: ${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}
+
     permissions:
       contents: read
       id-token: write
