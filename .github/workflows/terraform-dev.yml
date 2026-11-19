@@ -70,9 +70,9 @@ jobs:
       TF_VAR_google_client_id: ${{ secrets.GOOGLE_CLIENT_ID }}
       TF_VAR_google_client_secret: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
-      # LinkedIn OpenID Connect
-      TF_VAR_linkedin_client_id: ${{ secrets.LINKEDIN_CLIENT_ID }}
-      TF_VAR_linkedin_client_secret: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
+      # LinkedIn OIDC — DEV environment
+      TF_VAR_linkedin_client_id: ${{ secrets.DEV_LINKEDIN_CLIENT_ID }}
+      TF_VAR_linkedin_client_secret: ${{ secrets.DEV_LINKEDIN_CLIENT_SECRET }}
 
     permissions:
       contents: read
