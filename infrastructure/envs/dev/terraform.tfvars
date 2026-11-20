@@ -36,7 +36,7 @@ enable_microsoft_login = true
 
 # Replace with the actual Directory (tenant) ID from
 # Microsoft Entra ID -> App registrations -> CTI - Development.
-microsoft_tenant_id = "REPLACE_WITH_YOUR_TENANT_GUID"
+microsoft_tenant_id = "e1349025-9afa-4554-81d6-a475c0253199"
 
 # Microsoft Client ID and Client Secret are supplied securely
 # through the GitHub DEV environment secrets:
