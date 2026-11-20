@@ -32,7 +32,7 @@ enable_linkedin_login = true
 # GitHub Actions and the Terraform plan is reviewed.
 # --------------------------------------------------------------
 
-enable_microsoft_login = false
+enable_microsoft_login = true
 
 # Replace with the actual Directory (tenant) ID from
 # Microsoft Entra ID -> App registrations -> CTI - Development.
