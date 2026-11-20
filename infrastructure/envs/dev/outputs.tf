@@ -63,3 +63,37 @@ output "cognito_admin_group_name" {
   description = "CTI Cognito administrator group"
   value       = module.cognito.admin_group_name
 }
+
+# ------------------------------------------------------------
+# 4. Federated Authentication Status - DEV
+# ------------------------------------------------------------
+
+output "google_login_enabled" {
+  description = "Whether Google Sign-In is enabled in DEV."
+  value       = module.cognito.google_login_enabled
+}
+
+output "linkedin_login_enabled" {
+  description = "Whether LinkedIn Sign-In is enabled in DEV."
+  value       = module.cognito.linkedin_login_enabled
+}
+
+output "microsoft_login_enabled" {
+  description = "Whether Microsoft Entra ID Sign-In is enabled in DEV."
+  value       = module.cognito.microsoft_login_enabled
+}
+
+output "federated_login_enabled" {
+  description = "Whether any federated identity provider is enabled in DEV."
+  value       = module.cognito.federated_login_enabled
+}
+
+# ------------------------------------------------------------
+# 5. Cognito Hosted Domain - DEV
+# ------------------------------------------------------------
+
+output "cognito_domain" {
+  description = "Cognito hosted domain URL for DEV authentication."
+  value       = module.cognito.cognito_domain
+}
+

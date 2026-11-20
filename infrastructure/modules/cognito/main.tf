@@ -5,30 +5,6 @@
 # ============================================================
 
 # ------------------------------------------------------------
-# 0. Federated Authentication Configuration
-# ------------------------------------------------------------
-
-locals {
-  # Enable OAuth when Google or LinkedIn is enabled.
-  enable_federated_login = (
-    var.enable_google_login ||
-    var.enable_linkedin_login
-  )
-
-  # Preserve Cognito email/password authentication.
-  # Include only enabled external identity providers.
-  enabled_identity_providers = concat(
-    ["COGNITO"],
-    var.enable_google_login ? [
-      aws_cognito_identity_provider.google[0].provider_name
-    ] : [],
-    var.enable_linkedin_login ? [
-      aws_cognito_identity_provider.linkedin[0].provider_name
-    ] : []
-  )
-}
-
-# ------------------------------------------------------------
 # 1. Cognito User Pool
 # ------------------------------------------------------------
 
@@ -90,11 +66,8 @@ resource "aws_cognito_user_pool" "this" {
 # 2. Google Identity Provider
 # ------------------------------------------------------------
 #
-# Preserve the existing Google provider settings observed
-# in DEV Cognito and the Terraform plan.
-#
-# Do not change working Google authentication when adding
-# LinkedIn OIDC.
+# Preserve existing Google configuration.
+# Do not change working Google authentication.
 # ------------------------------------------------------------
 
 resource "aws_cognito_identity_provider" "google" {
@@ -109,7 +82,6 @@ resource "aws_cognito_identity_provider" "google" {
     client_secret    = var.google_client_secret
     authorize_scopes = "openid email profile"
 
-    # Existing Cognito Google provider endpoint settings.
     attributes_url = "https://people.googleapis.com/v1/people/me?personFields="
 
     attributes_url_add_attributes = "true"
@@ -123,7 +95,6 @@ resource "aws_cognito_identity_provider" "google" {
     token_url = "https://www.googleapis.com/oauth2/v4/token"
   }
 
-  # Preserve existing Google attribute mappings.
   attribute_mapping = {
     email          = "email"
     email_verified = "email_verified"
@@ -150,14 +121,13 @@ resource "aws_cognito_identity_provider" "linkedin" {
     attributes_request_method = "GET"
   }
 
-  # LinkedIn may omit the email claim.
+  # LinkedIn may omit an email verification claim.
   # Application-side authentication must handle this safely.
   attribute_mapping = {
     email = "email"
     name  = "name"
   }
 
-  # Validate credentials only when this resource is created.
   lifecycle {
     precondition {
       condition = (
@@ -173,7 +143,66 @@ resource "aws_cognito_identity_provider" "linkedin" {
 }
 
 # ------------------------------------------------------------
-# 4. Cognito Web Application Client
+# 4. Microsoft Entra ID OpenID Connect Identity Provider
+# ------------------------------------------------------------
+#
+# Microsoft Sign-In via Amazon Cognito.
+#
+# Provider name: Microsoft
+# Provider type: OIDC
+#
+# Separate DEV and PROD Microsoft application registrations.
+#
+# Tenant-specific issuer:
+# https://login.microsoftonline.com/<tenant-id>/v2.0
+#
+# Microsoft is disabled until explicitly enabled by the
+# environment configuration.
+# ------------------------------------------------------------
+
+resource "aws_cognito_identity_provider" "microsoft" {
+  count = var.enable_microsoft_login ? 1 : 0
+
+  user_pool_id  = aws_cognito_user_pool.this.id
+  provider_name = "Microsoft"
+  provider_type = "OIDC"
+
+  provider_details = {
+    client_id     = var.microsoft_client_id
+    client_secret = var.microsoft_client_secret
+
+    authorize_scopes = "openid profile email"
+
+    oidc_issuer = "https://login.microsoftonline.com/${var.microsoft_tenant_id}/v2.0"
+
+    attributes_request_method = "GET"
+  }
+
+  # Do not automatically assume Microsoft email is verified.
+  # Confirm email claim availability during DEV testing.
+  attribute_mapping = {
+    email = "email"
+    name  = "name"
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        var.microsoft_client_id != null &&
+        var.microsoft_client_secret != null &&
+        var.microsoft_tenant_id != null &&
+        try(length(trimspace(var.microsoft_client_id)) > 0, false) &&
+        try(length(trimspace(var.microsoft_client_secret)) > 0, false) &&
+        try(length(trimspace(var.microsoft_tenant_id)) > 0, false)
+      )
+
+      error_message = "Microsoft Client ID, Client Secret and Tenant ID are required when Microsoft login is enabled."
+    }
+  }
+}
+
+# ------------------------------------------------------------
+# 5. Cognito Web Application Client
 # ------------------------------------------------------------
 
 resource "aws_cognito_user_pool_client" "web" {
@@ -204,7 +233,7 @@ resource "aws_cognito_user_pool_client" "web" {
   prevent_user_existence_errors = "ENABLED"
 
   # ----------------------------------------------------------
-  # Cognito + Google + LinkedIn OAuth
+  # Cognito + Google + LinkedIn + Microsoft OAuth
   # ----------------------------------------------------------
 
   supported_identity_providers = local.enabled_identity_providers
@@ -227,7 +256,7 @@ resource "aws_cognito_user_pool_client" "web" {
 }
 
 # ------------------------------------------------------------
-# 5. Administrator Group
+# 6. Administrator Group
 # ------------------------------------------------------------
 
 resource "aws_cognito_user_group" "admin" {
@@ -240,11 +269,11 @@ resource "aws_cognito_user_group" "admin" {
 }
 
 # ------------------------------------------------------------
-# 6. Cognito Hosted Domain
+# 7. Cognito Hosted Domain
 # ------------------------------------------------------------
 #
-# A hosted domain is needed when either Google
-# or LinkedIn federation is enabled.
+# A hosted domain is required when Google,
+# LinkedIn or Microsoft federation is enabled.
 # ------------------------------------------------------------
 
 resource "aws_cognito_user_pool_domain" "this" {
@@ -253,6 +282,7 @@ resource "aws_cognito_user_pool_domain" "this" {
   domain       = "cti-${var.environment}-auth"
   user_pool_id = aws_cognito_user_pool.this.id
 }
+
 
 
 

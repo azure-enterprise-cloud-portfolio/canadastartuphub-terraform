@@ -145,4 +145,83 @@ variable "linkedin_client_secret" {
   }
 }
 
+# --- Microsoft Entra ID OAuth / OIDC --------------------------
+#
+# Microsoft authentication uses the existing Cognito User Pool.
+#
+# DEV application registration:
+# CTI - Development
+#
+# Separate Microsoft credentials must be used for PROD.
+#
+# Microsoft login remains disabled until explicitly enabled.
+# ------------------------------------------------------------
+
+variable "enable_microsoft_login" {
+  description = "Enable Microsoft Entra ID OIDC sign-in for CTI development."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "microsoft_tenant_id" {
+  description = "Microsoft Entra Directory (Tenant) ID for CTI development."
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_tenant_id != null &&
+        can(regex(
+          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          var.microsoft_tenant_id
+        ))
+      )
+    )
+
+    error_message = "DEV Microsoft Entra Tenant ID must be a valid GUID when Microsoft login is enabled."
+  }
+}
+
+variable "microsoft_client_id" {
+  description = "Microsoft Entra Application Client ID for CTI development."
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_client_id != null &&
+        try(length(trimspace(var.microsoft_client_id)) > 0, false)
+      )
+    )
+
+    error_message = "DEV Microsoft Client ID is required when Microsoft login is enabled."
+  }
+}
+
+variable "microsoft_client_secret" {
+  description = "Microsoft Entra Application Client Secret for CTI development."
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_client_secret != null &&
+        try(length(trimspace(var.microsoft_client_secret)) > 0, false)
+      )
+    )
+
+    error_message = "DEV Microsoft Client Secret is required when Microsoft login is enabled."
+  }
+}
+
+
 
