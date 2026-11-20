@@ -58,3 +58,37 @@ output "cognito_admin_group_name" {
   description = "CTI Cognito administrator group"
   value       = module.cognito.admin_group_name
 }
+
+# ------------------------------------------------------------
+# 4. Federated Authentication Status - PROD
+# ------------------------------------------------------------
+
+output "google_login_enabled" {
+  description = "Whether Google OAuth login is enabled in PROD."
+  value       = module.cognito.google_login_enabled
+}
+
+output "linkedin_login_enabled" {
+  description = "Whether LinkedIn OIDC login is enabled in PROD."
+  value       = module.cognito.linkedin_login_enabled
+}
+
+output "microsoft_login_enabled" {
+  description = "Whether Microsoft Entra ID OIDC login is enabled in PROD."
+  value       = module.cognito.microsoft_login_enabled
+}
+
+output "federated_login_enabled" {
+  description = "Whether federated authentication is enabled in PROD."
+  value       = module.cognito.federated_login_enabled
+}
+
+# ------------------------------------------------------------
+# 5. Cognito Hosted Domain - PROD
+# ------------------------------------------------------------
+
+output "cognito_domain" {
+  description = "Cognito hosted domain URL for PROD authentication."
+  value       = module.cognito.cognito_domain
+}
+

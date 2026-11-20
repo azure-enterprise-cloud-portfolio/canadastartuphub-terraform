@@ -61,6 +61,11 @@ jobs:
       TF_VAR_linkedin_client_id: ${{ secrets.PROD_LINKEDIN_CLIENT_ID }}
       TF_VAR_linkedin_client_secret: ${{ secrets.PROD_LINKEDIN_CLIENT_SECRET }}
 
+      # Microsoft Entra ID OIDC — PROD
+      TF_VAR_microsoft_client_id: ${{ secrets.PROD_MICROSOFT_CLIENT_ID }}
+      TF_VAR_microsoft_client_secret: ${{ secrets.PROD_MICROSOFT_CLIENT_SECRET }}
+
+
     permissions:
       contents: read
       id-token: write
@@ -124,6 +129,38 @@ jobs:
           fi
 
           echo "Production LinkedIn OIDC credentials are configured."
+
+
+      # ------------------------------------------------------
+      # 4. Verify Microsoft Entra ID OIDC credentials
+      # ------------------------------------------------------
+      #
+      # Verify credentials only when Microsoft login is enabled.
+      #
+      # Never print credential values.
+      # ------------------------------------------------------
+
+      - name: Verify Microsoft Entra ID OIDC Credentials
+        shell: bash
+        run: |
+          if grep -Eq '^[[:space:]]*enable_microsoft_login[[:space:]]*=[[:space:]]*true([[:space:]]*(#.*)?)?$' terraform.tfvars; then
+
+            if [[ -z "${TF_VAR_microsoft_client_id//[[:space:]]/}" ]]; then
+              echo "::error::PROD_MICROSOFT_CLIENT_ID is missing or empty."
+              exit 1
+            fi
+
+            if [[ -z "${TF_VAR_microsoft_client_secret//[[:space:]]/}" ]]; then
+              echo "::error::PROD_MICROSOFT_CLIENT_SECRET is missing or empty."
+              exit 1
+            fi
+
+            echo "Production Microsoft Entra ID credentials are configured."
+
+          else
+            echo "Microsoft Entra ID OIDC is disabled in production."
+          fi
+
 
       # ------------------------------------------------------
       # 4. Check Terraform backend configuration

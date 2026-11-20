@@ -191,3 +191,88 @@ variable "linkedin_client_secret" {
   }
 }
 
+# ------------------------------------------------------------
+# 6. Microsoft Entra ID OpenID Connect Authentication - PROD
+# ------------------------------------------------------------
+#
+# Microsoft application: CTI - Production
+#
+# Authentication uses the shared Cognito module.
+#
+# PROD and DEV use separate Microsoft app registrations.
+#
+# Client ID and Client Secret must come from
+# GitHub Environment: prod.
+#
+# Never store Client Secrets in terraform.tfvars.
+#
+# Microsoft login is disabled unless explicitly enabled.
+# ------------------------------------------------------------
+
+variable "enable_microsoft_login" {
+  description = "Enable Microsoft Entra ID OIDC authentication for CTI production."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "microsoft_tenant_id" {
+  description = "Microsoft Entra Directory (Tenant) ID for CTI production."
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_tenant_id != null &&
+        can(regex(
+          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          var.microsoft_tenant_id
+        ))
+      )
+    )
+
+    error_message = "PROD Microsoft Entra Tenant ID must be a valid GUID when Microsoft login is enabled."
+  }
+}
+
+variable "microsoft_client_id" {
+  description = "Microsoft Entra Application Client ID for CTI production."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_client_id != null &&
+        try(length(trimspace(var.microsoft_client_id)) > 0, false)
+      )
+    )
+
+    error_message = "PROD Microsoft Client ID is required when Microsoft login is enabled."
+  }
+}
+
+variable "microsoft_client_secret" {
+  description = "Microsoft Entra Application Client Secret for CTI production."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_client_secret != null &&
+        try(length(trimspace(var.microsoft_client_secret)) > 0, false)
+      )
+    )
+
+    error_message = "PROD Microsoft Client Secret is required when Microsoft login is enabled."
+  }
+}
+
+
