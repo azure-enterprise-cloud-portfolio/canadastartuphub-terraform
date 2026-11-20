@@ -23,24 +23,18 @@ ses_create_amplify_compute_role = true                                # attach t
 
 enable_linkedin_login = true
 
-# --- Microsoft Entra ID OIDC — Production -------------------
-#
-# Microsoft app registration: CTI - Production
-#
-# Credentials are supplied through GitHub PROD environment
-# secrets. Do not store Client Secrets in terraform.tfvars.
-#
-# Keep disabled until Microsoft DEV login is tested and
-# production deployment is approved.
+
+# ------------------------------------------------------------
+# Microsoft Entra ID OIDC - Production
 # ------------------------------------------------------------
 
-enable_microsoft_login = false
+enable_microsoft_login = true
 
-# Directory (tenant) ID from Microsoft Entra ID.
-# Replace with the actual tenant GUID before enabling login.
+# Microsoft Entra Directory (Tenant) ID
 microsoft_tenant_id = "e1349025-9afa-4554-81d6-a475c0253199"
 
-# GitHub PROD environment secrets:
+# GitHub PROD repository secrets:
 #
 # PROD_MICROSOFT_CLIENT_ID
 # PROD_MICROSOFT_CLIENT_SECRET
+
