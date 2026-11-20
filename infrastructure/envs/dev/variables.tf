@@ -175,7 +175,7 @@ variable "microsoft_tenant_id" {
       (
         var.microsoft_tenant_id != null &&
         can(regex(
-          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
           var.microsoft_tenant_id
         ))
       )
