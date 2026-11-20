@@ -122,7 +122,85 @@ variable "linkedin_client_secret" {
 }
 
 # ------------------------------------------------------------
-# 4. Cognito OAuth Callback Configuration
+# 4. Microsoft Entra ID OpenID Connect Authentication
+# ------------------------------------------------------------
+#
+# Microsoft Sign-In is implemented through Cognito OIDC.
+#
+# DEV and PROD use separate Microsoft app registrations.
+#
+# Client credentials must be passed using GitHub Actions
+# secrets, not hardcoded in Terraform configuration.
+# ------------------------------------------------------------
+
+variable "enable_microsoft_login" {
+  description = "Enable Microsoft Entra ID Sign-In using OpenID Connect"
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "microsoft_tenant_id" {
+  description = "Microsoft Entra Directory (Tenant) ID"
+  type        = string
+  default     = null
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_tenant_id != null &&
+        can(regex(
+          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          var.microsoft_tenant_id
+        ))
+      )
+    )
+
+    error_message = "A valid Microsoft Entra Tenant ID is required when Microsoft login is enabled."
+  }
+}
+
+variable "microsoft_client_id" {
+  description = "Microsoft Entra Application Client ID"
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_client_id != null &&
+        try(length(trimspace(var.microsoft_client_id)) > 0, false)
+      )
+    )
+
+    error_message = "Microsoft Client ID is required when Microsoft login is enabled."
+  }
+}
+
+variable "microsoft_client_secret" {
+  description = "Microsoft Entra Application Client Secret"
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition = (
+      !var.enable_microsoft_login ||
+      (
+        var.microsoft_client_secret != null &&
+        try(length(trimspace(var.microsoft_client_secret)) > 0, false)
+      )
+    )
+
+    error_message = "Microsoft Client Secret is required when Microsoft login is enabled."
+  }
+}
+
+# ------------------------------------------------------------
+# 5. Cognito OAuth Callback Configuration
 # ------------------------------------------------------------
 
 variable "oauth_callback_urls" {
@@ -136,3 +214,4 @@ variable "oauth_logout_urls" {
   type        = list(string)
   default     = []
 }
+

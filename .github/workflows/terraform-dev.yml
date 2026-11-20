@@ -74,6 +74,12 @@ jobs:
       TF_VAR_linkedin_client_id: ${{ secrets.DEV_LINKEDIN_CLIENT_ID }}
       TF_VAR_linkedin_client_secret: ${{ secrets.DEV_LINKEDIN_CLIENT_SECRET }}
 
+
+      # Microsoft Entra ID OIDC — DEV environment
+      TF_VAR_microsoft_client_id: ${{ secrets.DEV_MICROSOFT_CLIENT_ID }}
+      TF_VAR_microsoft_client_secret: ${{ secrets.DEV_MICROSOFT_CLIENT_SECRET }}
+
+
     permissions:
       contents: read
       id-token: write
@@ -129,6 +135,31 @@ jobs:
 
           else
             echo "LinkedIn OIDC is disabled in terraform.tfvars."
+          fi
+
+
+      # ------------------------------------------------------
+      # Verify Microsoft Entra ID credentials when enabled
+      # ------------------------------------------------------
+      - name: Verify Microsoft Entra ID OIDC Credentials
+        shell: bash
+        run: |
+          if grep -Eq '^[[:space:]]*enable_microsoft_login[[:space:]]*=[[:space:]]*true([[:space:]]*(#.*)?)?$' terraform.tfvars; then
+
+            if [[ -z "${TF_VAR_microsoft_client_id//[[:space:]]/}" ]]; then
+              echo "::error::DEV_MICROSOFT_CLIENT_ID is missing or empty."
+              exit 1
+            fi
+
+            if [[ -z "${TF_VAR_microsoft_client_secret//[[:space:]]/}" ]]; then
+              echo "::error::DEV_MICROSOFT_CLIENT_SECRET is missing or empty."
+              exit 1
+            fi
+
+            echo "Microsoft Entra ID OIDC credentials are configured."
+
+          else
+            echo "Microsoft Entra ID OIDC is disabled in terraform.tfvars."
           fi
 
       # ------------------------------------------------------

@@ -36,6 +36,24 @@ module "cognito" {
   linkedin_client_secret = var.linkedin_client_secret
 
   # ----------------------------------------------------------
+  # Microsoft Entra ID OpenID Connect Authentication
+  # ----------------------------------------------------------
+  #
+  # Production Microsoft application: CTI - Production
+  #
+  # Credentials are supplied using GitHub Actions secrets.
+  # Do not place credentials in Terraform source files.
+  #
+  # Enable only after successful DEV authentication testing
+  # and review of the PROD Terraform plan.
+  # ----------------------------------------------------------
+
+  enable_microsoft_login  = var.enable_microsoft_login
+  microsoft_tenant_id     = var.microsoft_tenant_id
+  microsoft_client_id     = var.microsoft_client_id
+  microsoft_client_secret = var.microsoft_client_secret
+
+  # ----------------------------------------------------------
   # Production OAuth Callback URL
   # ----------------------------------------------------------
 
@@ -51,3 +69,4 @@ module "cognito" {
     "https://canadatechintelligence.ca/login"
   ]
 }
+
